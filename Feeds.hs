@@ -12,7 +12,6 @@ import Control.Lens
 import Data.Text.Lens
 import Data.Text (Text)
 import qualified Data.Text as T
-import Control.Comonad
 
 import qualified Text.Feed.Types as Feed
 import qualified Text.Feed.Query as Feed
@@ -63,9 +62,11 @@ addItem item feed = feed & feedItems %~ cons item
 
 ------------------------------------------------------------------------
 
+{-
 instance Comonad Feed' where
   extract feed  = feed^.feedItems
   extend k feed = feed & feedItems .~ k feed
+-}
 
 instance Arbitrary FeedKind where
   arbitrary = Test.QuickCheck.elements [AtomKind, RSS1Kind, RSS2Kind]
@@ -79,8 +80,8 @@ instance Arbitrary is => Arbitrary (Feed' is) where
                    <*> arbitrary
 
 -- XXX: Checking this gives some linking error...
-prop_comonad1 :: Feed' [Int] -> Bool
-prop_comonad1 feed = extend extract feed == feed
+-- prop_comonad1 :: Feed' [Int] -> Bool
+-- prop_comonad1 feed = extend extract feed == feed
 
 ------------------------------------------------------------------------
 
