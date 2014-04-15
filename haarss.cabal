@@ -1,0 +1,23 @@
+name:                haarss
+version:             0.1.0.0
+synopsis:            An ncurses based feed reader
+-- description:
+homepage:            none
+license:             ISC
+license-file:        LICENSE
+author:              Stevan Andjelkovic
+maintainer:          none
+-- copyright:
+build-type:          Simple
+cabal-version:       >=1.8
+
+------------------------------------------------------------------------
+executable haarss
+  main-is:       Main.hs
+  other-modules: Types, Model, View, Controller
+  build-depends: base ==4.5.*, mtl ==2.1.*, stm ==2.2.*, text ==1.0.*,
+                 unix ==2.5.*, ncurses ==0.2.*, vty-ui ==1.6.*,
+-- download ==0.3.*,
+                 feed ==0.3.*, containers ==0.4.*, array ==0.4.*,
+                 lens ==3.10.*
+  ghc-options:   -Wall -fno-warn-unused-do-bind
