@@ -2,14 +2,9 @@
 
 module Feeds where
 
-import Data.Function
 import Test.QuickCheck
-import Control.Applicative
-import Control.Monad
-import Data.Monoid
 import Data.List
 import Control.Lens
-import Data.Text.Lens
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -71,13 +66,13 @@ instance Comonad Feed' where
 instance Arbitrary FeedKind where
   arbitrary = Test.QuickCheck.elements [AtomKind, RSS1Kind, RSS2Kind]
 
-instance Arbitrary Text where
-  arbitrary = pure $ T.pack "apa"
-
-instance Arbitrary is => Arbitrary (Feed' is) where
-  arbitrary = Feed <$> arbitrary <*> arbitrary <*> arbitrary
-                   <*> arbitrary <*> arbitrary <*> arbitrary
-                   <*> arbitrary
+-- instance Arbitrary Text where
+--   arbitrary = pure $ T.pack "apa"
+--
+-- instance Arbitrary is => Arbitrary (Feed' is) where
+--   arbitrary = Feed <$> arbitrary <*> arbitrary <*> arbitrary
+--                    <*> arbitrary <*> arbitrary <*> arbitrary
+--                    <*> arbitrary
 
 -- XXX: Checking this gives some linking error...
 -- prop_comonad1 :: Feed' [Int] -> Bool
@@ -107,7 +102,7 @@ mergeItems :: [AnnItem] -> [AnnItem] -> [AnnItem]
 mergeItems old new = map (\n -> keepOldAnn (n^.item) old) new
   where
   keepOldAnn :: Item -> [AnnItem] -> AnnItem
-  keepOldAnn n old = case find (\o -> n == o^.item) old of
+  keepOldAnn n old' = case find (\o -> n == o^.item) old' of
     Nothing -> AnnItem False       n
     Just o  -> AnnItem (o^.isRead) n
 
@@ -128,14 +123,15 @@ convert feed = newEmptyFeed (kind feed)
   kind (Feed.AtomFeed _)  = AtomKind
   kind (Feed.RSS1Feed _)  = RSS1Kind
   kind (Feed.RSSFeed _)   = RSS2Kind
+  kind (Feed.XMLFeed _)   = AtomKind -- ?
 
 convertItems :: Feed.Item -> Item
-convertItems item = newEmptyItem
-  & itemTitle       .~ T.pack (maybe "" id $ Feed.getItemTitle item)
-  & itemLink        .~ T.pack (maybe "" id $ Feed.getItemLink item)
-  & itemDate        .~ T.pack (maybe "" id $ Feed.getItemDate item)
-  & itemFeedLink    .~ T.pack (maybe "" id $ Feed.getItemFeedLink item)
-  & itemDescription .~ T.pack (maybe "" id $ Feed.getItemDescription item)
+convertItems i = newEmptyItem
+  & itemTitle       .~ T.pack (maybe "" id $ Feed.getItemTitle i)
+  & itemLink        .~ T.pack (maybe "" id $ Feed.getItemLink i)
+  & itemDate        .~ T.pack (maybe "" id $ Feed.getItemDate i)
+  & itemFeedLink    .~ T.pack (maybe "" id $ Feed.getItemFeedLink i)
+  & itemDescription .~ T.pack (maybe "" id $ Feed.getItemDescription i)
 
 defaultAnn :: Feed -> AnnFeed
 defaultAnn feed = feed & feedItems.traverse %~ AnnItem False

@@ -2,16 +2,11 @@
 
 module View where
 
-import Data.Function
 import Data.Monoid
-import Test.QuickCheck (quickCheck)
-import Control.Lens
-import Data.Text.Lens
+import Control.Lens hiding (pre)
 import Control.Concurrent.STM
 import Data.Char
-import Data.Maybe
 import Data.List
-import Data.IORef
 import Graphics.Vty
 import Text.HTML.TagSoup
 
@@ -21,8 +16,10 @@ import Feeds
 
 ------------------------------------------------------------------------
 
+defaultStatus :: String
 defaultStatus = " Press 'h' for help."
 
+debug :: Bool
 debug = False
 
 render ::  DisplayRegion -> Int -> (Model, String) -> Image
@@ -56,32 +53,36 @@ render sz count (m, buf) =
       emptyRows = max 0 $ fromEnum (region_height sz) - 4 - fromEnum (image_height body)
     status :: Int -> String -> String
     status 0  ""  = defaultStatus
-    status 0 buf  = " Input:" ++ buf
+    status 0 b    = " Input:" ++ b
     status n ""   = " Downloading (" ++ show n ++ " feed" ++ (if n == 1
                                                              then ""
                                                              else "s") ++ " to go)"
     status _   _  = "status: bad state"
 
-separator  = char def_attr ' '
+separator :: Image
+separator = char def_attr ' '
 
 view :: Vty -> TVar Int -> (Model, String) -> IO ()
-view vty count ms = do
+view vty vcount ms = do
   sz <- display_bounds $ terminal vty
-  count <- readTVarIO count
+  n <- readTVarIO vcount
   -- stat <- readIORef status
   -- i <- atomically $ tryReadTMVar count
   -- let stat' = stat ++ "(count = " ++ show i ++ ")"
-  update vty $ pic_for_image $ render sz count ms
+  update vty $ pic_for_image $ render sz n ms
 
 
+standout_attr, bold_attr, standout_bold_attr, underline_attr :: Attr
 standout_attr = def_attr `with_style` standout
 bold_attr = def_attr `with_style` bold
 standout_bold_attr = standout_attr `with_style` bold
 underline_attr = def_attr `with_style` underline
 
+title :: AnnItem -> T.Text
 -- title = maybe "(No title)" T.unpack . _itemTitle
 title = _itemTitle . _item
 
+desc :: Feed' a -> T.Text
 desc feed | feed^.feedDescription /= T.empty = feed^.feedDescription
           | otherwise                        = feed^.feedTitle
 
@@ -98,24 +99,24 @@ showUnread feed = feed^.feedItems.to
 drawModel :: Model -> DisplayRegion -> Image
 drawModel (Model fs i FeedsView) sz = case visible fs (i^.above) (toInteger $ region_height sz) of
   (pre, feed, nex) ->
-    drawList (\feed -> T.unpack $ feed^.feedTitle <> " " <> showUnread feed) pre
+    drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) pre
     <->
     string standout_attr (T.unpack $ ' ' `T.cons` feed^.feedTitle <> " " <> showUnread feed)
     <->
-    drawList (\feed -> T.unpack $ feed^.feedTitle <> " " <> showUnread feed) nex
+    drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) nex
 drawModel (Model fs i (ItemsView is False)) sz = case visible is (i^.above) (toInteger $ region_height sz) of
   (pre, feed, nex) ->
     string bold_attr (T.unpack $ T.cons ' ' $ desc (fs^.curr))
     <->
     separator
     <->
-    drawList' (map (\i -> if i^.isRead then def_attr else bold_attr) pre) (T.unpack . title) pre
+    drawList' (map (\it -> if it^.isRead then def_attr else bold_attr) pre) (T.unpack . title) pre
     <->
     string (if feed^.isRead then standout_attr else standout_bold_attr)
            (T.unpack $ ' ' `T.cons` title feed)
     <->
-    drawList' (map (\i -> if i^.isRead then def_attr else bold_attr) nex) (T.unpack . title) nex
-drawModel (Model fs i (ItemsView is True)) sz =
+    drawList' (map (\it -> if it^.isRead then def_attr else bold_attr) nex) (T.unpack . title) nex
+drawModel (Model fs _ (ItemsView is True)) sz =
   string bold_attr (T.unpack $ ' ' `T.cons` desc (fs^.curr))
   <->
   separator
@@ -148,12 +149,13 @@ drawList' attrs r xs = vert_cat $
     string attr $ (' ' :) $ r x
 
 fmt :: Integer -> String -> [String]
-fmt max = map unwords . go 0 [] . words
+fmt maxLen = map unwords . go 0 [] . words
   where
   go :: Integer -> [String] -> [String] -> [[String]]
   go _      acc []       = [reverse acc]
-  go rowLen acc (w : ws) | rowLen + wl + 1 > max = reverse acc : go wl [w] ws
-                         | otherwise             = go (rowLen + wl + 1) (w : acc) ws
+  go rowLen acc (w : ws)
+    | rowLen + wl + 1 > maxLen = reverse acc : go wl [w] ws
+    | otherwise                = go (rowLen + wl + 1) (w : acc) ws
     where
     wl = genericLength w
 
@@ -168,7 +170,7 @@ removeHtml
   . parseTags
 
 replace :: Eq a => a -> a -> [a] -> [a]
-replace old new []       = []
+replace _   _   []       = []
 replace old new (x : xs) | x == old  = new : replace old new xs
                          | otherwise = x   : replace old new xs
 
@@ -181,5 +183,3 @@ prop_fmt i s = filter (not . isSpace) (concat (fmt i s)) ==
 
 prop_replace :: Int -> [Int] -> Bool
 prop_replace x xs = replace x x xs == xs
-
-

@@ -4,18 +4,13 @@
 module Model where
 
 import Data.Monoid
-import Data.Maybe
 import Data.List
 import Data.Foldable (Foldable)
 
--- import Control.Applicative
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Concurrent.STM
 
-import Control.Lens
-import Data.Text.Lens
-import Data.Text (Text)
+import Control.Lens hiding (below)
 import qualified Data.Text as T
 
 import Feeds
@@ -40,12 +35,12 @@ closeZip :: Zip a -> [a]
 closeZip (Zip xs z ys) = reverse xs ++ z : ys
 
 moveZip :: Dir -> Zip a -> Maybe (Zip a)
-moveZip Up   (Zip [] z ys) = Nothing
+moveZip Up   (Zip [] _ _) = Nothing
 moveZip Up   (Zip xs z ys) = Just $ Zip (take (length xs - 1) xs) (last xs) (z : ys)
 moveZip Down (Zip xs z (y : ys)) = Just $ Zip (xs ++ [z]) y ys
 moveZip Top  (Zip xs z ys)       = case xs of
-                                     []     -> Nothing
-                                     x : xs -> Just $ Zip [] x (xs ++ z : ys)
+                                     []      -> Nothing
+                                     x : xs' -> Just $ Zip [] x (xs' ++ z : ys)
 moveZip Bot  (Zip xs z ys)       = case ys of
                                      []    -> Nothing
                                      _ : _ -> Just $ Zip (xs ++ z : take (length ys - 1) ys)
@@ -85,16 +80,16 @@ makeLenses ''View
 makePrisms ''View
 
 viewIso :: Iso' View (Either () (Zip AnnItem, Bool))
-viewIso = iso to from
+viewIso = iso t f
   where
-  to FeedsView        = Left ()
-  to (ItemsView is b) = Right (is, b)
+  t FeedsView        = Left ()
+  t (ItemsView is b) = Right (is, b)
 
-  from (Left _)        = FeedsView
-  from (Right (is, b)) = ItemsView is b
+  f (Left _)        = FeedsView
+  f (Right (is, b)) = ItemsView is b
 
 isFeedsView :: Model -> Bool
-isFeedsView (Model _ i FeedsView) = True
+isFeedsView (Model _ _ FeedsView) = True
 isFeedsView _                     = False
 
 {-
@@ -112,7 +107,7 @@ instance Show Model where
 ------------------------------------------------------------------------
 
 makeModel :: [AnnFeed] -> Integer -> Model
-makeModel []       rows =
+makeModel []       _    =
   Model (Zip [] (defaultAnn $ newEmptyFeed AtomKind) []) emptyInfo FeedsView
 makeModel (f : fs) rows =
   Model (Zip [] f                       fs) i         FeedsView
@@ -136,15 +131,16 @@ addDummyItems :: Feed -> Int -> Feed
 addDummyItems feed = foldr addItem feed . reverse . go
   where
   go 0 = []
-  go n = item n : go (n - 1)
+  go n = mkItem n : go (n - 1)
     where
-    item n = newEmptyItem
-               & itemTitle       .~ ("Item " <> T.pack (show n))
-               & itemDescription .~ T.pack (concat $ replicate 10 "blah blah")
+    mkItem m = newEmptyItem
+             & itemTitle       .~ ("Item " <> T.pack (show m))
+             & itemDescription .~ T.pack (concat $ replicate 10 "blah blah")
 
 initialModel :: Integer -> Model
 initialModel = makeModel $ map defaultAnn (slashdotFeed : dummyFeeds 100)
 
+slashdotFeed, undeadlyFeed :: Feed' [Item]
 slashdotFeed
   = newEmptyFeed AtomKind
   & feedTitle .~ "/."

@@ -48,8 +48,8 @@ fetchFeeds urls count = do
   where
   waitForThreads :: TVar Int -> IO ()
   waitForThreads alive = atomically $ do
-    count <- readTVar alive
-    check (count == 0)
+    n <- readTVar alive
+    check (n == 0)
 
 fetch :: String -> IOArray Int Result -> Int -> TVar Int -> IO ()
 fetch url arr idx count = do
@@ -71,8 +71,8 @@ openAsFeed' url = do
       Just feed -> return $ Right feed
 
 downloadURL :: String -> IO (Either String String)
-downloadURL url =
-  case parseURI url of
+downloadURL s =
+  case parseURI s of
     Nothing  -> return $ Left "Bad url"
     Just uri -> do
       resp <- simpleHTTP $ request uri

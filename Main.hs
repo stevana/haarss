@@ -56,31 +56,20 @@
 
 module Main where
 
-import Prelude hiding (catch)
-
 import Data.Typeable
-import Data.Maybe
-import Data.Either
-import Data.List (genericLength)
 import Data.Monoid
 
-import System.IO
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
 
 import Control.Lens hiding (view)
 import qualified Data.Text as T
-import Data.Text.Lens
 import Control.Exception
 import Control.Monad
 import Data.Char
-import qualified Data.Map as M
 import System.Exit
 import System.Process
-
-import qualified Text.Feed.Types as Feed
-import qualified Text.Feed.Query as Feed
 
 import qualified Graphics.Vty as Vty
 
@@ -123,14 +112,20 @@ data Command = Move Dir | Redraw | Output String | UpdateFeed | UpdateFeeds
 
 ------------------------------------------------------------------------
 
+whenE :: forall a. Behavior Bool -> Event a -> Event a
 whenE = flip gate
 
 unlessE :: Behavior Bool -> Event a -> Event a
 unlessE b f = whenE (not <$> b) f
 
-key       = modKey []
+key :: Char -> Vty.Event
+key = modKey []
+
+modKey :: [Vty.Modifier] -> Char -> Vty.Event
 modKey ms = flip Vty.EvKey ms . Vty.KASCII
-enter     = Vty.EvKey Vty.KEnter []
+
+enter :: Vty.Event
+enter = Vty.EvKey Vty.KEnter []
 
 readMaybe :: Read a => String -> Maybe a
 readMaybe s = case reads s of
@@ -154,14 +149,14 @@ main = do
   vty <- Vty.mkVty
   (eEvent, pushEvent) <- sync newEvent
 
-  count <- newTVarIO 0
+  vcount <- newTVarIO 0
   size <- Vty.display_bounds $ Vty.terminal vty
 
   -- XXX: clean this up...
   mmodel <- join . fmap readMaybe <$> safeReadFile "haarss.save"
   let iniModel = maybe (initialModel (toInteger $ Vty.region_height size)) id mmodel
 
-  sync $ setupReactive config vty iniModel count eEvent
+  sync $ setupReactive config vty iniModel vcount eEvent
 
   forever (Vty.next_event vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel model) -> do
@@ -179,14 +174,14 @@ main = do
 
 safeReadFile :: FilePath -> IO (Maybe String)
 safeReadFile fp = do
-  s <- readFile fp `catch` (\(e :: SomeException) -> return "")
+  s <- readFile fp `catch` (\(_ :: SomeException) -> return "")
   return $ if null s then Nothing else Just s
 
 ------------------------------------------------------------------------
 
 setupReactive :: Config -> Vty.Vty -> Model -> TVar Int ->
                  Event Vty.Event -> Reactive ()
-setupReactive config vty iniModel count eEvent = do
+setupReactive config vty iniModel vcount eEvent = do
 
   bMode <- hold True $ mconcat
              [ False <$ filterE (== key 'a') eEvent
@@ -231,9 +226,9 @@ setupReactive config vty iniModel count eEvent = do
           tid <- forkIO $ forever $ do
             sync $ pushTick ()
             threadDelay 100000
-          feeds <- fetchFeeds' (config^.urls) count
+          fs <- fetchFeeds' (config^.urls) vcount
           killThread tid
-          return $ map (defaultAnn . convert) feeds
+          return $ map (defaultAnn . convert) fs
 
   rec
     let eFeed :: Event AnnFeed
@@ -249,9 +244,9 @@ setupReactive config vty iniModel count eEvent = do
             tid <- forkIO $ forever $ do
               sync $ pushTick ()
               threadDelay 100000
-            atomically $ writeTVar count 1
+            atomically $ writeTVar vcount 1
             feed <- fetchFeed' url
-            atomically $ writeTVar count 0
+            atomically $ writeTVar vcount 0
             killThread tid
             return $ defaultAnn $ convert feed
 
@@ -300,17 +295,17 @@ setupReactive config vty iniModel count eEvent = do
         helper model = do
           url <- getItemUrl model
           return $ do
-            rawSystem (config^.browser) [url]
+            _ <- rawSystem (config^.browser) [url]
             return ()
 
         getItemUrl :: Model -> Maybe String
-        getItemUrl (Model _ _ (ItemsView items _)) =
-          Just $ T.unpack $ items^.curr.item.itemLink
+        getItemUrl (Model _ _ (ItemsView is _)) =
+          Just $ T.unpack $ is^.curr.item.itemLink
         getItemUrl _ = Nothing
 
 
-  listen (value bModel) (\model -> view vty count (model, ""))
-  listen eOpenUrl       id
+  _ <- listen (value bModel) (\model -> view vty vcount (model, ""))
+  _ <- listen eOpenUrl       id
 
   return ()
 
@@ -353,8 +348,6 @@ setupReactive config vty iniModel count eEvent = do
 
   eModelBuffer <- changes $ (,) <$> bModel <*> bInputBuffer
 
-  reactimate $ view vty status count <$> eModelBuffer
+  reactimate $ view vty status vcount <$> eModelBuffer
 
 -}
-
-
