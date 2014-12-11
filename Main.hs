@@ -218,6 +218,12 @@ setupReactive config vty iniModel vcount eEvent = do
   -- XXX: Used to update the statusbar, better name?.
   (eTick, pushTick) <- newEvent
 
+  -- XXX:
+  -- Perhaps it would be better to have @fetchFeeds@ take an io action
+  -- (callback) to perform upon successful fetches. Make this @sync
+  -- pushSuccessDL@ below, and remove the the @tid@ stuff and move @vcount@
+  -- into the model (eSuccessDL decrements the vcount).
+
   let eFeeds :: Event [AnnFeed]
       eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
         where
