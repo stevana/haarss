@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Fetching where
 
 import Data.Either
@@ -9,14 +11,15 @@ import Data.Array.IO
 import Text.Feed.Types (Feed)
 import Text.Feed.Import (parseFeedString)
 
-import Network.HTTP
-import Network.URI
+import Control.Exception
+import Control.Lens
+import Data.ByteString.Lens (unpackedChars)
+
+import Network.Wreq
+import Network.HTTP.Client (HttpException)
+import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 ------------------------------------------------------------------------
-
-
-fetchFeed :: String -> TVar Int -> IO Result
-fetchFeed url count = head <$> fetchFeeds [url] count
 
 fetchFeed' :: String -> IO Feed
 -- fetchFeed' url = head <$> fetchFeeds' [url]
@@ -65,31 +68,20 @@ openAsFeed' :: String -> IO (Either String Feed)
 openAsFeed' url = do
   eDoc <- downloadURL url
   case eDoc of
-    Left err  -> return $ Left err
+    Left err  -> return $ Left $ show err
     Right doc -> case parseFeedString doc of
       Nothing   -> return $ Left "failed to parse feed"
       Just feed -> return $ Right feed
 
-downloadURL :: String -> IO (Either String String)
-downloadURL s =
-  case parseURI s of
-    Nothing  -> return $ Left "Bad url"
-    Just uri -> do
-      resp <- simpleHTTP $ request uri
-      case resp of
-        Left x  -> return $ Left ("Error connecting: " ++ show x)
-        Right r -> case rspCode r of
-          (2,_,_) -> return $ Right (rspBody r)
-          -- A HTTP redirect
-          (3,_,_) -> case findHeader HdrLocation r of
-            Nothing  -> return $ Left (show r)
-            Just url -> downloadURL url
-          _       -> return $ Left (show r)
+downloadURL :: String -> IO (Either HttpException String)
+downloadURL uri = do
 
-  where
-  request uri = Request
-    { rqURI     = uri
-    , rqMethod  = GET
-    , rqHeaders = []
-    , rqBody    = ""
-    }
+  let opts = defaults & redirects .~ 3
+                      & manager   .~ Left tlsManagerSettings
+
+  r <- getWith opts uri
+
+    -- XXX: there might be other errors?
+    `catch` \(e :: HttpException) -> throw e
+
+  return $ Right $ r ^. responseBody . unpackedChars -- XXX: don't unpack
