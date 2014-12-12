@@ -87,6 +87,10 @@ pretty m =
   unlines
     [ ""
     , "Viewing: " ++ m^.viewing.to prettyView
+    , ""
+    , "Above: "    ++ m^.info.above.to show
+    , "Position: " ++ m^.info.position.to show
+    , "Below: "    ++ m^.info.below.to show
     ]
   where
   prettyZip :: Zip a -> (a -> String) -> String
@@ -114,18 +118,6 @@ viewIso = iso t f
 isFeedsView :: Model -> Bool
 isFeedsView (Model _ _ FeedsView _) = True
 isFeedsView _                       = False
-
-{-
-instance Show Model where
-  show (Model fs i v) = unlines
-    [ "prev:  " ++ T.unpack (fs^.prev.traversed.feedTitle)
-    , "curr:  " ++ fs^.curr.feedTitle.to T.unpack
-    , "next:  " ++ fs^.next.traversed.feedTitle.to T.unpack
-    , "above: " ++ show (i^.above)
-    , "pos:   " ++ show (i^.position)
-    , "below: " ++ show (i^.below)
-    ]
--}
 
 ------------------------------------------------------------------------
 
