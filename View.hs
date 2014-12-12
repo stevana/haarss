@@ -4,7 +4,6 @@ module View where
 
 import Data.Monoid
 import Control.Lens hiding (pre)
-import Control.Concurrent.STM
 import Data.Char
 import Data.List
 import Graphics.Vty
@@ -20,7 +19,7 @@ defaultStatus :: String
 defaultStatus = " Press 'h' for help."
 
 debug :: Bool
-debug = False
+debug = True
 
 render ::  DisplayRegion -> (Model, String) -> Image
 render sz (m, buf) =
@@ -28,7 +27,7 @@ render sz (m, buf) =
   then
     separator
     <->
-    drawList id (lines (show m))
+    drawList id (lines (pretty m))
     <->
     separator
     <->

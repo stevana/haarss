@@ -80,6 +80,28 @@ makeLenses ''Model
 makeLenses ''View
 makePrisms ''View
 
+pretty :: Model -> String
+pretty m =
+  prettyZip (m^.feeds) (show . _feedTitle)
+  ++
+  unlines
+    [ ""
+    , "Viewing: " ++ m^.viewing.to prettyView
+    ]
+  where
+  prettyZip :: Zip a -> (a -> String) -> String
+  prettyZip z s = unlines
+    [ "Prev: " ++ z^.prev.traverse.to s
+    , "Curr: " ++ z^.curr.to s
+    , "Next: " ++ z^.next.traverse.to s
+    ]
+
+  prettyView :: View -> String
+  prettyView FeedsView            = "FeedsView"
+  prettyView (ItemsView is False) = "Items \n\n" ++
+                                       prettyZip is (show . _itemTitle . _item)
+  prettyView (ItemsView is True)  = "Text: " ++ is^.curr.undefined
+
 viewIso :: Iso' View (Either () (Zip AnnItem, Bool))
 viewIso = iso t f
   where
