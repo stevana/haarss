@@ -2,86 +2,63 @@
 
 module Fetching where
 
-import Data.Either
-import Control.Applicative
 import Control.Monad
-import Control.Concurrent
+import Control.Concurrent (forkIO)
 import Control.Concurrent.STM
-import Data.Array.IO
-import Text.Feed.Types (Feed)
-import Text.Feed.Import (parseFeedString)
-
 import Control.Exception
 import Control.Lens
-import Data.ByteString.Lens (unpackedChars)
+
+import Data.Char (chr)
+import qualified Data.ByteString.Lazy as BS
+import Data.Array.IO
 
 import Network.Wreq
 import Network.HTTP.Client (HttpException)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 
+import Text.Feed.Types (Feed)
+import Text.Feed.Import (parseFeedString)
+
 ------------------------------------------------------------------------
 
-fetchFeed' :: String -> IO Feed
--- fetchFeed' url = head <$> fetchFeeds' [url]
-fetchFeed' url = do
-  mfeed <- openAsFeed' url
-  case mfeed of
-    Left err   -> error err
-    Right feed -> return feed
+download :: [String] -> IO () -> (BS.ByteString -> a) -> IO [a]
+download urls callback parser = do
 
+  alive  <- newTVarIO $ length urls
+  result <- newArray_ (1, length urls) :: IO (IOArray Int a)
 
-type Result = (String, Either String Feed)
-
--- XXX: Deal with errors...
-fetchFeeds' :: [String] -> TVar Int -> IO [Feed]
-fetchFeeds' urls count = fmap (\result -> rights $ map snd result) $ fetchFeeds urls count
-
-fetchFeeds :: [String] -> TVar Int -> IO [Result]
-fetchFeeds urls count = do
-
-  -- XXX: create this in main and pass it around so we can fromPoll it
-  -- and display progress while updating?
-  atomically $ writeTVar count $ length urls
-  result <- newArray_ (1, length urls) :: IO (IOArray Int Result)
   forM_ (zip [1..] urls) $ \(idx, url) -> do
-    forkIO $ fetch url result idx count
+    forkIO $ fetch idx url parser alive result
 
-  waitForThreads count
+  waitForThreads alive
   getElems result
   where
+  fetch :: Int -> String -> (BS.ByteString -> a) -> TVar Int ->
+           IOArray Int a -> IO ()
+  fetch idx url parser alive result = do
+    let opts = defaults & redirects .~ 3
+                        & manager   .~ Left tlsManagerSettings
+
+    r <- getWith opts url
+
+      -- XXX: there might be other errors?
+      -- `catch` \(e :: HttpException) -> throw e
+
+    -- XXX: generalise callback?
+    callback
+
+    writeArray result idx $ r^.responseBody.to parser
+    atomically $ modifyTVar alive pred
+
   waitForThreads :: TVar Int -> IO ()
   waitForThreads alive = atomically $ do
     n <- readTVar alive
     check (n == 0)
 
-fetch :: String -> IOArray Int Result -> Int -> TVar Int -> IO ()
-fetch url arr idx count = do
-  result <- openAsFeed' url
-  writeArray arr idx (url, result)
-  atomically $ do
-    n <- readTVar count
-    writeTVar count $ n - 1
-
-------------------------------------------------------------------------
-
-openAsFeed' :: String -> IO (Either String Feed)
-openAsFeed' url = do
-  eDoc <- downloadURL url
-  case eDoc of
-    Left err  -> return $ Left $ show err
-    Right doc -> case parseFeedString doc of
-      Nothing   -> return $ Left "failed to parse feed"
-      Just feed -> return $ Right feed
-
-downloadURL :: String -> IO (Either HttpException String)
-downloadURL uri = do
-
-  let opts = defaults & redirects .~ 3
-                      & manager   .~ Left tlsManagerSettings
-
-  r <- getWith opts uri
-
-    -- XXX: there might be other errors?
-    `catch` \(e :: HttpException) -> throw e
-
-  return $ Right $ r ^. responseBody . unpackedChars -- XXX: don't unpack
+downloadFeeds :: [String] -> IO () -> IO [Feed]
+downloadFeeds urls callback = download urls callback parser
+  where
+  -- XXX: Error handling, avoid unpacking bytestring
+  parser :: BS.ByteString -> Feed
+  parser = maybe (error "failed to parse feed") id .
+             parseFeedString . map (chr . fromEnum) . BS.unpack

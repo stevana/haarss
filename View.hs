@@ -22,8 +22,8 @@ defaultStatus = " Press 'h' for help."
 debug :: Bool
 debug = False
 
-render ::  DisplayRegion -> Int -> (Model, String) -> Image
-render sz count (m, buf) =
+render ::  DisplayRegion -> (Model, String) -> Image
+render sz (m, buf) =
   if debug
   then
     separator
@@ -32,8 +32,7 @@ render sz count (m, buf) =
     <->
     separator
     <->
-    -- string def_attr ("Statusbar:" ++ status buf mcount)
-    string def_attr ("Statusbar: " ++ show count)
+    string def_attr ("Statusbar: " ++ m^.downloading.to show)
   else
     bar " haarss 0.1"
     <->
@@ -43,7 +42,7 @@ render sz count (m, buf) =
     <->
     separator
     <->
-    bar (status count buf)
+    bar (status (m^.downloading) buf)
     where
     bar        = string (def_attr `with_style` standout)
     body       = drawModel m sz
@@ -62,14 +61,13 @@ render sz count (m, buf) =
 separator :: Image
 separator = char def_attr ' '
 
-view :: Vty -> TVar Int -> (Model, String) -> IO ()
-view vty vcount ms = do
+view :: Vty -> (Model, String) -> IO ()
+view vty ms = do
   sz <- display_bounds $ terminal vty
-  n <- readTVarIO vcount
   -- stat <- readIORef status
   -- i <- atomically $ tryReadTMVar count
   -- let stat' = stat ++ "(count = " ++ show i ++ ")"
-  update vty $ pic_for_image $ render sz n ms
+  update vty $ pic_for_image $ render sz ms
 
 
 standout_attr, bold_attr, standout_bold_attr, underline_attr :: Attr
@@ -97,14 +95,14 @@ showUnread feed = feed^.feedItems.to
 -- XXX: since feed description (+ separator) was added to ShowItem, we
 -- probably need to display fewer feeds, i.e. drop 2 nex?
 drawModel :: Model -> DisplayRegion -> Image
-drawModel (Model fs i FeedsView) sz = case visible fs (i^.above) (toInteger $ region_height sz) of
+drawModel (Model fs i FeedsView _) sz = case visible fs (i^.above) (toInteger $ region_height sz) of
   (pre, feed, nex) ->
     drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) pre
     <->
     string standout_attr (T.unpack $ ' ' `T.cons` feed^.feedTitle <> " " <> showUnread feed)
     <->
     drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) nex
-drawModel (Model fs i (ItemsView is False)) sz = case visible is (i^.above) (toInteger $ region_height sz) of
+drawModel (Model fs i (ItemsView is False) _) sz = case visible is (i^.above) (toInteger $ region_height sz) of
   (pre, feed, nex) ->
     string bold_attr (T.unpack $ T.cons ' ' $ desc (fs^.curr))
     <->
@@ -116,7 +114,7 @@ drawModel (Model fs i (ItemsView is False)) sz = case visible is (i^.above) (toI
            (T.unpack $ ' ' `T.cons` title feed)
     <->
     drawList' (map (\it -> if it^.isRead then def_attr else bold_attr) nex) (T.unpack . title) nex
-drawModel (Model fs _ (ItemsView is True)) sz =
+drawModel (Model fs _ (ItemsView is True) _) sz =
   string bold_attr (T.unpack $ ' ' `T.cons` desc (fs^.curr))
   <->
   separator

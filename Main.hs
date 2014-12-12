@@ -60,9 +60,6 @@ import Data.Typeable
 import Data.Monoid
 
 import Control.Applicative
-import Control.Concurrent
-import Control.Concurrent.STM
-
 import Control.Lens hiding (view)
 import qualified Data.Text as T
 import Control.Exception
@@ -149,14 +146,13 @@ main = do
   vty <- Vty.mkVty
   (eEvent, pushEvent) <- sync newEvent
 
-  vcount <- newTVarIO 0
   size <- Vty.display_bounds $ Vty.terminal vty
 
   -- XXX: clean this up...
   mmodel <- join . fmap readMaybe <$> safeReadFile "haarss.save"
   let iniModel = maybe (initialModel (toInteger $ Vty.region_height size)) id mmodel
 
-  sync $ setupReactive config vty iniModel vcount eEvent
+  sync $ setupReactive config vty iniModel eEvent
 
   forever (Vty.next_event vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel model) -> do
@@ -179,9 +175,8 @@ safeReadFile fp = do
 
 ------------------------------------------------------------------------
 
-setupReactive :: Config -> Vty.Vty -> Model -> TVar Int ->
-                 Event Vty.Event -> Reactive ()
-setupReactive config vty iniModel vcount eEvent = do
+setupReactive :: Config -> Vty.Vty -> Model -> Event Vty.Event -> Reactive ()
+setupReactive config vty iniModel eEvent = do
 
   bMode <- hold True $ mconcat
              [ False <$ filterE (== key 'a') eEvent
@@ -215,25 +210,14 @@ setupReactive config vty iniModel vcount eEvent = do
         isResize (Vty.EvResize _ _) = True
         isResize _                  = False
 
-  -- XXX: Used to update the statusbar, better name?.
-  (eTick, pushTick) <- newEvent
-
-  -- XXX:
-  -- Perhaps it would be better to have @fetchFeeds@ take an io action
-  -- (callback) to perform upon successful fetches. Make this @sync
-  -- pushSuccessDL@ below, and remove the the @tid@ stuff and move @vcount@
-  -- into the model (eSuccessDL decrements the vcount).
+  (eFeedDownloaded, pushFeedDownloaded) <- newEvent
 
   let eFeeds :: Event [AnnFeed]
       eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
         where
         io :: IO [AnnFeed]
         io = do
-          tid <- forkIO $ forever $ do
-            sync $ pushTick ()
-            threadDelay 100000
-          fs <- fetchFeeds' (config^.urls) vcount
-          killThread tid
+          fs <- downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
           return $ map (defaultAnn . convert) fs
 
   rec
@@ -243,17 +227,11 @@ setupReactive config vty iniModel vcount eEvent = do
                                           bModel
           where
           getFeedUrl :: Model -> String
-          getFeedUrl (Model fs _ _) = config^.urls^?! ix (fs^.prev.to length)
+          getFeedUrl m = config^.urls^?! ix (m^.feeds.prev.to length)
 
           io :: String -> IO AnnFeed
           io url = do
-            tid <- forkIO $ forever $ do
-              sync $ pushTick ()
-              threadDelay 100000
-            atomically $ writeTVar vcount 1
-            feed <- fetchFeed' url
-            atomically $ writeTVar vcount 0
-            killThread tid
+            [feed] <- downloadFeeds [url] (sync (pushFeedDownloaded ()))
             return $ defaultAnn $ convert feed
 
 
@@ -279,7 +257,13 @@ setupReactive config vty iniModel vcount eEvent = do
                        then model & feeds.traverse.feedItems.traverse.isRead .~ True
                        else model & viewing._ItemsView._1   .traverse.isRead .~ True
 
-                   , (\feed  model ->
+                   , cmdSem UpdateFeed $ \model ->
+                       model & downloading .~ 1
+
+                   , cmdSem UpdateFeeds $ \model ->
+                       model & downloading .~ config^.urls.to length
+
+                   , (\feed model ->
                        model & feeds.curr %~ flip Feeds.merge feed) <$> eFeed
 
                    -- XXX: this loses the current position (maybe not bad?)
@@ -289,7 +273,7 @@ setupReactive config vty iniModel vcount eEvent = do
 
                          -- makeModel feeds (model^.info.maxRows) <$> eFeeds
 
-                   , id <$ eTick
+                   , (\model -> model & downloading %~ pred) <$ eFeedDownloaded
                    ]
            :: Reactive (Behavior Model)
 
@@ -305,12 +289,12 @@ setupReactive config vty iniModel vcount eEvent = do
             return ()
 
         getItemUrl :: Model -> Maybe String
-        getItemUrl (Model _ _ (ItemsView is _)) =
+        getItemUrl (Model _ _ (ItemsView is _) _) =
           Just $ T.unpack $ is^.curr.item.itemLink
         getItemUrl _ = Nothing
 
 
-  _ <- listen (value bModel) (\model -> view vty vcount (model, ""))
+  _ <- listen (value bModel) (\model -> view vty (model, ""))
   _ <- listen eOpenUrl       id
 
   return ()

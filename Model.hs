@@ -61,9 +61,10 @@ emptyInfo :: VtyInfo
 emptyInfo = VtyInfo 0 0 0 0
 
 data Model = Model
-  { _feeds   :: Zip AnnFeed
-  , _info    :: VtyInfo
-  , _viewing :: View
+  { _feeds       :: Zip AnnFeed
+  , _info        :: VtyInfo
+  , _viewing     :: View
+  , _downloading :: Int
   }
   deriving (Show, Read)
 
@@ -89,8 +90,8 @@ viewIso = iso t f
   f (Right (is, b)) = ItemsView is b
 
 isFeedsView :: Model -> Bool
-isFeedsView (Model _ _ FeedsView) = True
-isFeedsView _                     = False
+isFeedsView (Model _ _ FeedsView _) = True
+isFeedsView _                       = False
 
 {-
 instance Show Model where
@@ -108,9 +109,9 @@ instance Show Model where
 
 makeModel :: [AnnFeed] -> Integer -> Model
 makeModel []       _    =
-  Model (Zip [] (defaultAnn $ newEmptyFeed AtomKind) []) emptyInfo FeedsView
+  Model (Zip [] (defaultAnn $ newEmptyFeed AtomKind) []) emptyInfo FeedsView 0
 makeModel (f : fs) rows =
-  Model (Zip [] f                       fs) i         FeedsView
+  Model (Zip [] f                       fs) i         FeedsView 0
   where
   i = emptyInfo & below   .~ rows - 5
                 & maxRows .~ rows - 5
@@ -159,7 +160,7 @@ move = execState . move'
 -- XXX: remove the bool?
 move' :: Dir -> State Model Bool
 move' dir = do
-  Model fs i v <- get
+  Model fs i v dl <- get
   case v of
     FeedsView -> case dir of
       Down -> case moveZip Down fs of
@@ -206,20 +207,20 @@ move' dir = do
       Out -> return True
 
       In -> do
-        put $ Model fs i $ ItemsView (makeZip (fs^.curr.feedItems)) False
+        put $ Model fs i (ItemsView (makeZip (fs^.curr.feedItems)) False) dl
         return False
 
     ItemsView is si -> case dir of
       Out -> if si
                 then do
-                  put $ Model fs i $ ItemsView is False
+                  put $ Model fs i (ItemsView is False) dl
                   return False
                 else do
-                  put $ Model (fs & curr.feedItems .~ closeZip is) i FeedsView
+                  put $ Model (fs & curr.feedItems .~ closeZip is) i FeedsView dl
                   return False
 
       In -> do
-        put $ Model fs i $ ItemsView (is & curr.isRead .~ True) (not si)
+        put $ Model fs i (ItemsView (is & curr.isRead .~ True) (not si)) dl
         return False
 
       Down -> case moveZip Down is of

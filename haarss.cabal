@@ -33,5 +33,6 @@ executable haarss
                  sodium ==0.10.*,
                  wreq >= 0.2.0.0 && < 0.4,
                  http-client ==0.4.*,
-                 http-client-tls ==0.2.*
+                 http-client-tls ==0.2.*,
+                 bytestring ==0.10.*
   ghc-options:   -Wall -fno-warn-unused-do-bind
