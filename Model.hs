@@ -102,9 +102,9 @@ pretty m =
 
   prettyView :: View -> String
   prettyView FeedsView            = "FeedsView"
-  prettyView (ItemsView is False) = "Items \n\n" ++
+  prettyView (ItemsView is False) = "ItemsView \n\n" ++
                                        prettyZip is (show . _itemTitle . _item)
-  prettyView (ItemsView is True)  = "Text: " ++ is^.curr.undefined
+  prettyView (ItemsView is True)  = "TextView"
 
 viewIso :: Iso' View (Either () (Zip AnnItem, Bool))
 viewIso = iso t f
