@@ -13,7 +13,10 @@ import Control.Monad.State
 import Control.Lens hiding (below)
 import qualified Data.Text as T
 
+import Config
 import Feeds
+
+----------------------------------------------------------------------
 
 data Zip a = Zip
   { _prev :: [a]
@@ -152,19 +155,13 @@ addDummyItems feed = foldr addItem feed . reverse . go
              & itemTitle       .~ ("Item " <> T.pack (show m))
              & itemDescription .~ T.pack (concat $ replicate 10 "blah blah")
 
-initialModel :: Integer -> Model
-initialModel = makeModel $ map defaultAnn (slashdotFeed : dummyFeeds 100)
-
-slashdotFeed, undeadlyFeed :: Feed' [Item]
-slashdotFeed
-  = newEmptyFeed AtomKind
-  & feedTitle .~ "/."
-  & feedHome  .~ "http://rss.slashdot.org/Slashdot/slashdot"
-
-undeadlyFeed
-  = newEmptyFeed AtomKind
-  & feedTitle .~ "Undeadly"
-  & feedHome  .~ "http://undeadly.org/cgi?action=rss"
+initialModel :: Config -> Integer -> Model
+initialModel cfg rows = makeModel fs rows
+  where
+  fs :: [AnnFeed]
+  fs = cfg^.urls & mapped %~ \url -> defaultAnn $ flip addDummyItems 1 $
+         newEmptyFeed AtomKind & feedTitle .~ T.pack url
+                               & feedHome  .~ T.pack url
 
 ------------------------------------------------------------------------
 

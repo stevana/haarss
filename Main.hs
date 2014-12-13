@@ -73,35 +73,13 @@ import qualified Graphics.Vty as Vty
 import FRP.Sodium
 import FRP.Sodium.IO
 
+import Config
 import Model
 import View
 import Fetching
 import Feeds
 
 ------------------------------------------------------------------------
-
--- Write config to file on exit? Lens. Parser for config files?
-data Config = Config
-  { _browser :: String
-  , _urls    :: [String]  -- Should probably contain more things, like
-                          -- nick name for feed, filter..
-
-  -- , shortcuts :: M.Map Vty.Key Command
-  -- , colours   :: M.Map Widget Colour
-  -- , language  :: [Lang] -- one for each feed to mine the body of the text?!
-  }
-  deriving Read
-
-makeLenses ''Config
-
-defaultConfig :: Config
-defaultConfig = Config
-  { _browser = "firefox"
-  , _urls    = [slashdot, undeadly]
-  }
-  where
-  undeadly = "http://undeadly.org/cgi?action=rss"
-  slashdot = "http://rss.slashdot.org/Slashdot/slashdot"
 
 data Command = Move Dir | Redraw | Output String | UpdateFeed | UpdateFeeds
   | OpenUrl | MarkAllAsRead | ToggleReadStatus
@@ -150,7 +128,7 @@ main = do
 
   -- XXX: clean this up...
   mmodel <- join . fmap readMaybe <$> safeReadFile "haarss.save"
-  let iniModel = maybe (initialModel (toInteger $ Vty.region_height size)) id mmodel
+  let iniModel = maybe (initialModel config (toInteger $ Vty.region_height size)) id mmodel
 
   sync $ setupReactive config vty iniModel eEvent
 
