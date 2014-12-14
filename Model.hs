@@ -37,18 +37,18 @@ makeZip (x : xs) = Zip [] x xs
 closeZip :: Zip a -> [a]
 closeZip (Zip xs z ys) = reverse xs ++ z : ys
 
-moveZip :: Dir -> Zip a -> Maybe (Zip a)
-moveZip Up   (Zip [] _ _) = Nothing
-moveZip Up   (Zip xs z ys) = Just $ Zip (take (length xs - 1) xs) (last xs) (z : ys)
-moveZip Down (Zip xs z (y : ys)) = Just $ Zip (xs ++ [z]) y ys
-moveZip Top  (Zip xs z ys)       = case xs of
-                                     []      -> Nothing
-                                     x : xs' -> Just $ Zip [] x (xs' ++ z : ys)
-moveZip Bot  (Zip xs z ys)       = case ys of
-                                     []    -> Nothing
-                                     _ : _ -> Just $ Zip (xs ++ z : take (length ys - 1) ys)
-                                                         (last ys) []
-moveZip _    _                   = Nothing
+moveZip :: Dir -> Zip a -> Zip a
+moveZip Up   z@(Zip [] _ _)      = z
+moveZip Up   (Zip xs c ys)       = Zip (take (length xs - 1) xs) (last xs) (c : ys)
+moveZip Down (Zip xs c (y : ys)) = Zip (xs ++ [c]) y ys
+moveZip Top  z@(Zip xs c ys)     = case xs of
+                                     []      -> z
+                                     x : xs' -> Zip [] x (xs' ++ c : ys)
+moveZip Bot  z@(Zip xs c ys)     = case ys of
+                                     []    -> z
+                                     _ : _ -> Zip (xs ++ c : take (length ys - 1) ys)
+                                                  (last ys) []
+moveZip _    z                   = z
 
 data VtyInfo = VtyInfo
   { _above    :: Integer
@@ -165,6 +165,34 @@ initialModel cfg rows = makeModel fs rows
 
 ------------------------------------------------------------------------
 
+moveModel :: Dir -> (Model -> Model)
+moveModel dir m = case m^.viewing of
+
+  FeedsView -> case dir of
+    In  -> m & viewing .~ ItemsView (m^.feeds.curr.feedItems.to makeZip) False
+    Out -> error "exiting" -- XXX
+    _   -> m & feeds %~ moveZip dir
+
+  ItemsView is txt -> case dir of
+    In  -> m & viewing .~ ItemsView (is & curr.isRead .~ True) (not txt)
+    Out -> if txt
+              then m & viewing .~ ItemsView is False
+              else m & viewing .~ FeedsView
+                     & feeds.curr.feedItems .~ closeZip is
+    _   -> m & viewing.items %~ moveZip dir
+
+moveVtyInfo :: Dir -> (Model -> Model)
+moveVtyInfo dir m = case m^.viewing of
+
+  FeedsView -> case dir of
+    Down -> m & info.position +~ 1
+
+move :: Dir -> (Model -> Model)
+move = moveModel
+
+------------------------------------------------------------------------
+{-
+
 move :: Dir -> (Model -> Model)
 move = execState . move'
 
@@ -275,3 +303,5 @@ move' dir = do
           info.above .= pl - i^.maxRows
           info.below .= pl
           return False
+
+-}
