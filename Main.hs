@@ -109,8 +109,8 @@ instance Exception SaveModel where
 
 main :: IO ()
 main = do
-  mconfig <- readMaybe <$> readFile "haarss.config"
-  let config = maybe defaultConfig id mconfig
+
+  config <- readConfig
 
   vty <- Vty.mkVty
   (eEvent, pushEvent) <- sync newEvent
