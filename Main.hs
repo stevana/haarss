@@ -59,6 +59,7 @@ import System.Exit
 import System.Process
 
 import qualified Graphics.Vty as Vty
+import Graphics.Vty.Prelude
 
 import FRP.Sodium
 import FRP.Sodium.IO
@@ -88,7 +89,7 @@ key :: Char -> Vty.Event
 key = modKey []
 
 modKey :: [Vty.Modifier] -> Char -> Vty.Event
-modKey ms = flip Vty.EvKey ms . Vty.KASCII
+modKey ms = flip Vty.EvKey ms . Vty.KChar
 
 enter :: Vty.Event
 enter = Vty.EvKey Vty.KEnter []
@@ -107,18 +108,18 @@ main = do
 
   cfg <- readConfig
 
-  vty  <- Vty.mkVty
-  size <- Vty.display_bounds $ Vty.terminal vty
+  vty  <- Vty.mkVty =<< Vty.standardIOConfig
+  size <- Vty.displayBounds $ Vty.outputIface vty
   (eEvent, pushEvent) <- sync newEvent
 
-  model <- setHeight (toInteger $ Vty.region_height size) <$>
+  model <- setHeight (toInteger $ regionHeight size) <$>
              readSavedModel cfg
 
   modelPath <- getModelPath
 
   sync $ setupReactive cfg vty model eEvent
 
-  forever (Vty.next_event vty >>= sync . pushEvent)
+  forever (Vty.nextEvent vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel model') -> do
                   Vty.shutdown vty
                   writeFile modelPath $ show model'
