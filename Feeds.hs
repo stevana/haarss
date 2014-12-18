@@ -11,6 +11,32 @@ import qualified Data.Text as T
 import qualified Text.Feed.Types as Feed
 import qualified Text.Feed.Query as Feed
 
+------------------------------------------------------------------------
+-- Plan
+
+{-
+
+* The following can wait (feed is a bit shit, but not a problem).
+
+    + bytestring to XML via attoparsec?
+       - xml-conduit (uses atto, lens interface provided via xml-lens)
+       - taggy + taggy-lens? Isn't as used as xml-conduit...
+
+    + XML to feed-like interface (but using Text and lenses)?
+
+         parseFeed :: Response ByteString -> Either Error Feed
+         parseFeed = responseBody . to (decodeUtf8With lenientDecode)
+                   . undefined
+
+         main :: IO ()
+         main = get url >>= print `fmap` parseFeed
+
+    + Encoding... (don't bother with this until we do our own parsing?!)
+
+    + 'R', 'R' results in empty feed... Problem is that parser doesn't
+      set feedHome correctly! Fix parser? (using config meanwhile)
+
+-}
 
 ------------------------------------------------------------------------
 

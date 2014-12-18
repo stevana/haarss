@@ -6,17 +6,8 @@
 
 -- Scroll long text
 
--- Encoding... (don't bother with this until we do our own parsing?!)
-
 -- search... see filter example:
 --  https://github.com/HeinrichApfelmus/reactive-banana/blob/master/reactive-banana-threepenny/src/CRUD.hs
-
--- 'R', 'R' results in empty feed... Problem is that parser doesn't set
--- feedHome correctly! Fix parser? (using config meanwhile)
-
--- https... see conduit-http? pipes? also use conduit/pipes for fetching/parsing?
-
--- Store last modified in AnnFeed, only fetch the body if needed?
 
 -- Extract content of an article using ML:
 --   http://newspaper.readthedocs.org/en/latest/
