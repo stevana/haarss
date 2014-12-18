@@ -3,16 +3,19 @@
 
 module Model where
 
+import Data.Char (isSpace)
 import Data.Monoid
 import Data.List
 import Data.Foldable (Foldable)
 
-import Control.Monad.Reader
-import Control.Monad.State
-
 import Control.Lens hiding (below)
 import qualified Data.Text as T
 
+import System.Directory (doesFileExist)
+import System.Environment (getEnv)
+import System.FilePath ((</>))
+
+import Constants
 import Config
 import Feeds
 
@@ -124,14 +127,11 @@ isFeedsView _                       = False
 
 ------------------------------------------------------------------------
 
-makeModel :: [AnnFeed] -> Integer -> Model
-makeModel []       _    =
+makeModel :: [AnnFeed] -> Model
+makeModel []       =
   Model (Zip [] (defaultAnn $ newEmptyFeed AtomKind) []) emptyInfo FeedsView 0
-makeModel (f : fs) rows =
-  Model (Zip [] f                       fs) i         FeedsView 0
-  where
-  i = emptyInfo & below   .~ rows - 5
-                & maxRows .~ rows - 5
+makeModel (f : fs) =
+  Model (Zip [] f                       fs) emptyInfo FeedsView 0
 
 emptyFeed :: Feed
 emptyFeed = newEmptyFeed AtomKind
@@ -155,8 +155,8 @@ addDummyItems feed = foldr addItem feed . reverse . go
              & itemTitle       .~ ("Item " <> T.pack (show m))
              & itemDescription .~ T.pack (concat $ replicate 10 "blah blah")
 
-initialModel :: Config -> Integer -> Model
-initialModel cfg rows = makeModel fs rows
+initialModel :: Config -> Model
+initialModel cfg = makeModel fs
   where
   fs :: [AnnFeed]
   fs = cfg^.urls & mapped %~ \url -> defaultAnn $ flip addDummyItems 1 $
@@ -305,3 +305,29 @@ move' dir = do
           return False
 
 -}
+
+------------------------------------------------------------------------
+
+readSavedModel :: Config -> IO Model
+readSavedModel cfg = do
+  home              <- getEnv "HOME"
+  let modelFilePath = home </> haarssDir </> savedModel
+  exists            <- doesFileExist modelFilePath
+
+  if not exists
+    then return $ initialModel cfg
+    else do
+      str <- readFile modelFilePath
+      case readMaybe str of
+        Nothing -> error "readSavedModel: failed to read saved model."
+        Just m  -> return m
+  where
+  readMaybe :: Read a => String -> Maybe a
+  readMaybe s = case reads s of
+                  [(x, rest)] | all isSpace rest -> Just x
+                  _                              -> Nothing
+
+setHeight :: Integer -> Model -> Model
+setHeight height m = m
+  & info.below   .~ height - 5
+  & info.maxRows .~ height - 5

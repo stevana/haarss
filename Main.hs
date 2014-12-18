@@ -55,7 +55,6 @@ import Control.Lens hiding (view)
 import qualified Data.Text as T
 import Control.Exception
 import Control.Monad
-import Data.Char
 import System.Exit
 import System.Process
 
@@ -93,11 +92,6 @@ modKey ms = flip Vty.EvKey ms . Vty.KASCII
 enter :: Vty.Event
 enter = Vty.EvKey Vty.KEnter []
 
-readMaybe :: Read a => String -> Maybe a
-readMaybe s = case reads s of
-                [(x, rest)] | all isSpace rest -> Just x
-                _                              -> Nothing
-
 ------------------------------------------------------------------------
 
 data SaveModel = SaveModel Model
@@ -110,23 +104,21 @@ instance Exception SaveModel where
 main :: IO ()
 main = do
 
-  config <- readConfig
+  cfg <- readConfig
 
-  vty <- Vty.mkVty
+  vty  <- Vty.mkVty
+  size <- Vty.display_bounds $ Vty.terminal vty
   (eEvent, pushEvent) <- sync newEvent
 
-  size <- Vty.display_bounds $ Vty.terminal vty
+  model <- setHeight (toInteger $ Vty.region_height size) <$>
+             readSavedModel cfg
 
-  -- XXX: clean this up...
-  mmodel <- join . fmap readMaybe <$> safeReadFile "haarss.save"
-  let iniModel = maybe (initialModel config (toInteger $ Vty.region_height size)) id mmodel
-
-  sync $ setupReactive config vty iniModel eEvent
+  sync $ setupReactive cfg vty model eEvent
 
   forever (Vty.next_event vty >>= sync . pushEvent)
-    `catches` [ Handler (\(SaveModel model) -> do
+    `catches` [ Handler (\(SaveModel model') -> do
                   Vty.shutdown vty
-                  writeFile "haarss.save" $ show model
+                  writeFile "haarss.save" $ show model'
                   exitSuccess)
               , Handler (\e               -> do
                   Vty.shutdown vty
@@ -136,11 +128,6 @@ main = do
               failure err = do
                 putStrLn $ "Unexpected error: " ++ err
                 exitFailure
-
-safeReadFile :: FilePath -> IO (Maybe String)
-safeReadFile fp = do
-  s <- readFile fp `catch` (\(_ :: SomeException) -> return "")
-  return $ if null s then Nothing else Just s
 
 ------------------------------------------------------------------------
 

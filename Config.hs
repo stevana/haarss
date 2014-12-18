@@ -2,20 +2,13 @@
 
 module Config (Config, urls, browser, readConfig) where
 
-import Control.Lens
+import Control.Lens (makeLenses)
 import Data.Char (isSpace)
 import System.Directory (doesFileExist, createDirectoryIfMissing)
 import System.Environment (getEnv)
 import System.FilePath ((</>))
 
-------------------------------------------------------------------------
--- * Constants
-
-haarssDir :: String
-haarssDir = ".haarss"
-
-config :: String
-config = "config"
+import Constants
 
 ------------------------------------------------------------------------
 -- * Types
@@ -60,7 +53,7 @@ readConfig = do
       writeFile configFilePath $ show defaultConfig
       return defaultConfig
     else do
-      str <- readFile $ home </> haarssDir </> config
+      str <- readFile configFilePath
       case readMaybe str of
         Nothing  -> error "readConfig: failed to parse config."
         Just cfg -> return cfg
