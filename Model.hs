@@ -313,14 +313,13 @@ move' dir = do
 
 readSavedModel :: Config -> IO Model
 readSavedModel cfg = do
-  home              <- getEnv "HOME"
-  let modelFilePath = home </> haarssDir </> savedModel
-  exists            <- doesFileExist modelFilePath
+  modelPath <- getModelPath
+  exists    <- doesFileExist modelPath
 
   if not exists
     then return $ initialModel cfg
     else do
-      str <- readFile modelFilePath
+      str <- readFile modelPath
       case readMaybe str of
         Nothing -> error "readSavedModel: failed to read saved model."
         Just m  -> return m

@@ -5,8 +5,7 @@ module Config (Config, urls, browser, readConfig) where
 import Control.Lens (makeLenses)
 import Data.Char (isSpace)
 import System.Directory (doesFileExist, createDirectoryIfMissing)
-import System.Environment (getEnv)
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory)
 
 import Constants
 
@@ -43,17 +42,16 @@ defaultConfig = Config
 readConfig :: IO Config
 readConfig = do
 
-  home               <- getEnv "HOME"
-  let configFilePath = home </> haarssDir </> config
-  exists             <- doesFileExist configFilePath
+  configPath <- getConfigPath
+  exists     <- doesFileExist configPath
 
   if not exists
     then do
-      createDirectoryIfMissing False $ home </> haarssDir
-      writeFile configFilePath $ show defaultConfig
+      createDirectoryIfMissing False $ takeDirectory configPath
+      writeFile configPath $ show defaultConfig
       return defaultConfig
     else do
-      str <- readFile configFilePath
+      str <- readFile configPath
       case readMaybe str of
         Nothing  -> error "readConfig: failed to parse config."
         Just cfg -> return cfg

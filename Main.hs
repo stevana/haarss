@@ -63,6 +63,7 @@ import qualified Graphics.Vty as Vty
 import FRP.Sodium
 import FRP.Sodium.IO
 
+import Constants
 import Config
 import Model
 import View
@@ -113,12 +114,14 @@ main = do
   model <- setHeight (toInteger $ Vty.region_height size) <$>
              readSavedModel cfg
 
+  modelPath <- getModelPath
+
   sync $ setupReactive cfg vty model eEvent
 
   forever (Vty.next_event vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel model') -> do
                   Vty.shutdown vty
-                  writeFile "haarss.save" $ show model'
+                  writeFile modelPath $ show model'
                   exitSuccess)
               , Handler (\e               -> do
                   Vty.shutdown vty

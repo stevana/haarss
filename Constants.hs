@@ -1,13 +1,30 @@
-module Constants where
+module Constants (getConfigPath, getModelPath) where
+
+import System.Environment (getEnv)
+import System.FilePath ((</>))
 
 ------------------------------------------------------------------------
 -- * Constants
 
-haarssDir :: String
+haarssDir :: FilePath
 haarssDir = ".haarss"
 
-config :: String
-config = "config"
+configPath :: FilePath
+configPath = haarssDir </> "config"
 
-savedModel :: String
-savedModel = "savedModel"
+modelPath :: FilePath
+modelPath = haarssDir </> "savedModel"
+
+------------------------------------------------------------------------
+-- * Helpers
+
+homePrefixed :: FilePath -> IO FilePath
+homePrefixed fp = do
+  home <- getEnv "HOME"
+  return $ home </> fp
+
+getConfigPath :: IO FilePath
+getConfigPath = homePrefixed configPath
+
+getModelPath :: IO FilePath
+getModelPath = homePrefixed modelPath
