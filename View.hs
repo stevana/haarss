@@ -19,7 +19,7 @@ defaultStatus :: String
 defaultStatus = " Press 'h' for help."
 
 debug :: Bool
-debug = True
+debug = False
 
 render ::  DisplayRegion -> (Model, String) -> Image
 render sz (m, buf) =

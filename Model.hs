@@ -179,7 +179,7 @@ moveModel dir m = case m^.viewing of
               then m & viewing .~ ItemsView is False
               else m & viewing .~ FeedsView
                      & feeds.curr.feedItems .~ closeZip is
-    _   -> m & viewing.items %~ moveZip dir
+    _   -> m & viewing .~ ItemsView (moveZip dir is) txt
 
 moveVtyInfo :: Dir -> (Model -> Model)
 moveVtyInfo dir m = case m^.viewing of
