@@ -1,14 +1,20 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, DeriveFunctor,
-             DeriveFoldable, DeriveTraversable #-}
+             DeriveFoldable, DeriveTraversable, DeriveGeneric #-}
 
 module Model where
+
+import Control.Applicative
+import Control.Lens hiding (below)
 
 import Data.Char (isSpace)
 import Data.Monoid
 import Data.List
 import Data.Foldable (Foldable)
+import Data.Serialize
+import qualified Data.ByteString as BS
 
-import Control.Lens hiding (below)
+import GHC.Generics (Generic)
+
 import qualified Data.Text as T
 
 import System.Directory (doesFileExist)
@@ -26,7 +32,7 @@ data Zip a = Zip
   , _curr :: a
   , _next :: [a]
   }
-  deriving (Show, Read, Functor, Foldable, Traversable)
+  deriving (Show, Read, Functor, Foldable, Traversable, Generic)
 
 makeLenses ''Zip
 
@@ -54,12 +60,12 @@ moveZip Bot  z@(Zip xs c ys)     = case ys of
 moveZip _    z                   = z
 
 data VtyInfo = VtyInfo
-  { _above    :: Integer
-  , _position :: Integer
-  , _below    :: Integer
-  , _maxRows  :: Integer
+  { _above    :: Int
+  , _position :: Int
+  , _below    :: Int
+  , _maxRows  :: Int
   }
-  deriving (Show, Read)
+  deriving (Show, Read, Generic)
 
 makeLenses ''VtyInfo
 
@@ -72,7 +78,7 @@ data Model = Model
   , _viewing     :: View
   , _downloading :: Int
   }
-  deriving (Show, Read)
+  deriving (Show, Read, Generic)
 
 data View
   = FeedsView
@@ -80,7 +86,7 @@ data View
       { _items    :: Zip AnnItem
       , _viewText :: Bool
       }
-  deriving (Show, Read)
+  deriving (Show, Read, Generic)
 
 makeLenses ''Model
 makeLenses ''View
@@ -97,6 +103,7 @@ pretty m =
     , "Above: "    ++ m^.info.above.to show
     , "Position: " ++ m^.info.position.to show
     , "Below: "    ++ m^.info.below.to show
+    , "Max rows: " ++ m^.info.maxRows.to show
     ]
   where
   prettyZip :: Zip a -> (a -> String) -> String
@@ -183,6 +190,21 @@ moveModel dir m = case m^.viewing of
               then m & viewing .~ ItemsView (moveZip dir is &
                                              curr.isRead .~ True) txt
               else m & viewing .~ ItemsView (moveZip dir is) txt
+
+data VtyModel = VtyModel
+  { _height   :: Int
+  , _browsing :: VtyBrowsing
+  }
+
+data VtyCursor = VtyCursor
+  { _dropped :: Int
+  , _index   :: Int
+  , _total   :: Int
+  }
+
+data VtyBrowsing
+  = FeedsBrowse { _cursor :: VtyCursor }
+  | ItemsBrowse VtyCursor VtyCursor
 
 moveVtyInfo :: Dir -> (Model -> Model)
 moveVtyInfo dir m = case m^.viewing of
@@ -319,17 +341,18 @@ readSavedModel cfg = do
   if not exists
     then return $ initialModel cfg
     else do
-      str <- readFile modelPath
-      case readMaybe str of
-        Nothing -> error "readSavedModel: failed to read saved model."
-        Just m  -> return m
-  where
-  readMaybe :: Read a => String -> Maybe a
-  readMaybe s = case reads s of
-                  [(x, rest)] | all isSpace rest -> Just x
-                  _                              -> Nothing
+      em <- decode <$> BS.readFile modelPath
+      case em of
+        Left err -> error $ "readSavedModel: " ++ err
+        Right m  -> return m
 
-setHeight :: Integer -> Model -> Model
-setHeight height m = m
-  & info.below   .~ height - 5
-  & info.maxRows .~ height - 5
+-- XXX: Better name?
+setHeight :: Int -> Model -> Model
+setHeight height m = m & info.maxRows .~ height - 5
+
+------------------------------------------------------------------------
+
+instance Serialize Model where
+instance Serialize View where
+instance Serialize VtyInfo where
+instance Serialize a => Serialize (Zip a) where

@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, RecursiveDo, DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, RecursiveDo,
+             DeriveDataTypeable #-}
 
 -- (New headlines), create a new feed with all unread items, where the
 -- titles of the items are prefixed by the feed title
@@ -19,7 +20,6 @@
 -- cmdargs package to handle command line stuff? Like what?
 
 -- use zipper from control.lens?!
--- Use binary package to save/restore the model? (if we need the speed?)
 
 ------------------------------------------------------------------------
 
@@ -49,6 +49,8 @@ module Main where
 
 import Data.Typeable
 import Data.Monoid
+import qualified Data.ByteString as BS
+import Data.Serialize
 
 import Control.Applicative
 import Control.Lens hiding (view)
@@ -112,8 +114,7 @@ main = do
   size <- Vty.displayBounds $ Vty.outputIface vty
   (eEvent, pushEvent) <- sync newEvent
 
-  model <- setHeight (toInteger $ regionHeight size) <$>
-             readSavedModel cfg
+  model <- setHeight (regionHeight size) <$> readSavedModel cfg
 
   modelPath <- getModelPath
 
@@ -122,7 +123,7 @@ main = do
   forever (Vty.nextEvent vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel model') -> do
                   Vty.shutdown vty
-                  writeFile modelPath $ show model'
+                  BS.writeFile modelPath $ encode model'
                   exitSuccess)
               , Handler (\e               -> do
                   Vty.shutdown vty

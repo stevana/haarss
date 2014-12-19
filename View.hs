@@ -95,14 +95,14 @@ showUnread feed = feed^.feedItems.to
 -- XXX: since feed description (+ separator) was added to ShowItem, we
 -- probably need to display fewer feeds, i.e. drop 2 nex?
 drawModel :: Model -> DisplayRegion -> Image
-drawModel (Model fs i FeedsView _) sz = case visible fs (i^.above) (toInteger $ regionHeight sz) of
+drawModel (Model fs i FeedsView _) sz = case visible fs (i^.above) (regionHeight sz) of
   (pre, feed, nex) ->
     drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) pre
     <->
     string standout_attr (T.unpack $ ' ' `T.cons` feed^.feedTitle <> " " <> showUnread feed)
     <->
     drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) nex
-drawModel (Model fs i (ItemsView is False) _) sz = case visible is (i^.above) (toInteger $ regionHeight sz) of
+drawModel (Model fs i (ItemsView is False) _) sz = case visible is (i^.above) (regionHeight sz) of
   (pre, feed, nex) ->
     string bold_attr (T.unpack $ T.cons ' ' $ desc (fs^.curr))
     <->
@@ -132,11 +132,11 @@ drawModel (Model fs _ (ItemsView is True) _) sz =
   lns = fmt (min 50 (toInteger (regionWidth sz) - 3)) $
      removeHtml $ T.unpack $ is^.curr.item.itemDescription
 
-visible :: Zip a -> Integer -> Integer -> ([a], a, [a])
+visible :: Zip a -> Int -> Int -> ([a], a, [a])
 visible (Zip pr cu ne) ab rows
-  = (pr', cu, take (fromInteger rows - length pr' - 5) ne)
+  = (pr', cu, take (rows - length pr' - 5) ne)
   where
-  pr' = drop (fromInteger ab) pr
+  pr' = drop ab pr
 
 drawList :: (a -> String) -> [a] -> Image
 drawList s xs = drawList' (replicate (length xs) defAttr) s xs

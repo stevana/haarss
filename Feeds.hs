@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveFunctor, TypeSynonymInstances, TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE DeriveFunctor, TypeSynonymInstances, TemplateHaskell,
+    OverloadedStrings, DeriveGeneric #-}
 
 module Feeds where
 
@@ -7,6 +8,10 @@ import Data.List
 import Control.Lens
 import Data.Text (Text)
 import qualified Data.Text as T
+
+import GHC.Generics (Generic)
+import Data.Serialize
+import Data.Text.Encoding
 
 import qualified Text.Feed.Types as Feed
 import qualified Text.Feed.Query as Feed
@@ -52,10 +57,10 @@ data Feed' is = Feed
   , _feedLastUpdate  :: Date
   , _feedItems       :: is
   }
-  deriving (Eq, Show, Read, Functor)
+  deriving (Eq, Show, Read, Functor, Generic)
 
 data FeedKind = AtomKind | RSS1Kind | RSS2Kind
-  deriving (Eq, Show, Read, Enum)
+  deriving (Eq, Show, Read, Enum, Generic)
 
 makeLenses ''Feed'
 
@@ -66,7 +71,7 @@ data Item = Item
   , _itemFeedLink    :: URL
   , _itemDescription :: Text
   }
-  deriving (Eq, Ord, Show, Read)
+  deriving (Eq, Ord, Show, Read, Generic)
 
 makeLenses ''Item
 
@@ -110,7 +115,7 @@ data AnnItem = AnnItem
   { _isRead :: Bool
   , _item   :: Item
   }
-  deriving (Show, Read)
+  deriving (Show, Read, Generic)
 
 makeLenses ''AnnItem
 
@@ -161,3 +166,14 @@ convertItems i = newEmptyItem
 
 defaultAnn :: Feed -> AnnFeed
 defaultAnn feed = feed & feedItems.traverse %~ AnnItem False
+
+------------------------------------------------------------------------
+
+instance Serialize FeedKind where
+instance Serialize Item where
+instance Serialize AnnItem where
+instance Serialize a => Serialize (Feed' a) where
+
+instance Serialize Text where
+  put txt = put $ encodeUtf8 txt
+  get     = fmap decodeUtf8 get
