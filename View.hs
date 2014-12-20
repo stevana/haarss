@@ -2,18 +2,14 @@
 
 module View where
 
-import Data.Monoid
 import Control.Lens hiding (pre)
-import Data.Char
-import Data.List
 import Graphics.Vty
-import Graphics.Vty.Prelude
-import Text.HTML.TagSoup
 
 import Data.Text (Text)
 import qualified Data.Text as T
 import Model
 import Feeds
+import Fetching.History
 
 ------------------------------------------------------------------------
 
@@ -56,14 +52,14 @@ render (m, buf) =
     status _   _  = "status: bad state"
 
 bar :: Text -> Image
-bar t = text' standoutAttr t <|> charFill standoutAttr ' ' 100 1
+bar t = text' standoutAttr t <|> charFill standoutAttr ' ' (100 :: Int) 1
 
 separator :: Image
 separator = char defAttr ' '
 
 view :: Vty -> (Model, String) -> IO ()
-view vty ms = do
-  update vty $ picForImage $ render ms
+view v ms = do
+  update v $ picForImage $ render ms
 
 ------------------------------------------------------------------------
 
@@ -78,17 +74,18 @@ drawZip z e f w h =
   aboveCursor = z^.prev.to (drop w)
 
 unread :: AnnFeed -> Text
-unread f = f^.feedItems.to
+unread f = f^.feed.feedItems.to
   (T.pack . (\s -> if s == "0" then "" else "(" ++ s ++ " new)") .
     show . length . filter ((== False) . _isRead))
 
-status :: AnnFeed -> Image
-status f = char defAttr ' '
+failedImage :: AnnFeed -> Image
+failedImage f | f^.history.to failed = char defAttr '!'
+              | otherwise            = char defAttr ' '
 
 feedImage :: AnnFeed -> Image
 feedImage f = horizCat
-  [ status f
-  , f^.feedTitle.to (text' defAttr)
+  [ failedImage f
+  , f^.feed.feedTitle.to (text' defAttr)
   , char defAttr ' '
   , text' defAttr (unread f)
   ]
@@ -98,7 +95,7 @@ itemImage i = char defAttr ' ' <|> i^.item.itemTitle.to (text' defAttr)
 
 focusedFeedImage :: AnnFeed -> Image
 focusedFeedImage f = horizCat
-  [ f^.feedTitle.to focusedText
+  [ f^.feed.feedTitle.to focusedText
   , char standoutAttr ' '
   , text' standoutAttr (unread f)
   ]
@@ -122,7 +119,7 @@ drawModel m =
   case m^.browsing of
     TheFeeds fs      -> drawZip fs feedImage focusedFeedImage p h
     TheItems _ is    -> drawZip is itemImage focusedItemImage p h
-    TheText  _ _ i s -> drawList id (i^.item.itemDescription.to
+    TheText  _ _ i _ -> drawList id (i^.item.itemDescription.to
                           (fmt' (min 50 w)))
 ------------------------------------------------------------------------
 

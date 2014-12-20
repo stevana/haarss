@@ -1,9 +1,9 @@
 {-# LANGUAGE DeriveFunctor, TypeSynonymInstances, TemplateHaskell,
     OverloadedStrings, DeriveGeneric #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Feeds where
 
-import Test.QuickCheck
 import Data.Char (isSpace)
 import Data.List
 import Control.Lens
@@ -16,6 +16,8 @@ import Data.Text.Encoding
 
 import qualified Text.Feed.Types as Feed
 import qualified Text.Feed.Query as Feed
+
+import Fetching.History
 
 ------------------------------------------------------------------------
 -- Plan
@@ -92,32 +94,9 @@ addItem item feed = feed & feedItems %~ cons item
 
 ------------------------------------------------------------------------
 
-{-
-instance Comonad Feed' where
-  extract feed  = feed^.feedItems
-  extend k feed = feed & feedItems .~ k feed
--}
-
-instance Arbitrary FeedKind where
-  arbitrary = Test.QuickCheck.elements [AtomKind, RSS1Kind, RSS2Kind]
-
--- instance Arbitrary Text where
---   arbitrary = pure $ T.pack "apa"
---
--- instance Arbitrary is => Arbitrary (Feed' is) where
---   arbitrary = Feed <$> arbitrary <*> arbitrary <*> arbitrary
---                    <*> arbitrary <*> arbitrary <*> arbitrary
---                    <*> arbitrary
-
--- XXX: Checking this gives some linking error...
--- prop_comonad1 :: Feed' [Int] -> Bool
--- prop_comonad1 feed = extend extract feed == feed
-
-------------------------------------------------------------------------
-
 data AnnItem = AnnItem
-  { _isRead :: Bool
-  , _item   :: Item
+  { _item   :: Item
+  , _isRead :: Bool
   }
   deriving Generic
 
@@ -126,14 +105,24 @@ makeLenses ''AnnItem
 instance Show AnnItem where
   show i = i^.item.itemTitle.to T.unpack
 
-type AnnFeed = Feed' [AnnItem]
+data AnnFeed = AnnFeed
+  { _feed    :: Feed' [AnnItem]
+  , _history :: [History]
+  }
+  deriving Generic
+
+makeLenses ''AnnFeed
+
+instance Show AnnFeed where
+  show f = f^.feed.feedTitle.to T.unpack
 
 mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
 mergeFeeds = zipWith merge
 
 merge :: AnnFeed -> AnnFeed -> AnnFeed
-merge old new = new & feedItems .~ mergeItems (old^.feedItems)
-                                              (new^.feedItems)
+merge old new = new & feed.feedItems .~ mergeItems (old^.feed.feedItems)
+                                                   (new^.feed.feedItems)
+                    & history %~ (++ old^.history)
 
 -- XXX: O(new^old)...
 mergeItems :: [AnnItem] -> [AnnItem] -> [AnnItem]
@@ -141,8 +130,8 @@ mergeItems old new = map (\n -> keepOldAnn (n^.item) old) new
   where
   keepOldAnn :: Item -> [AnnItem] -> AnnItem
   keepOldAnn n old' = case find (\o -> n == o^.item) old' of
-    Nothing -> AnnItem False       n
-    Just o  -> AnnItem (o^.isRead) n
+    Nothing -> AnnItem n False
+    Just o  -> AnnItem n (o^.isRead)
 
 ------------------------------------------------------------------------
 
@@ -153,15 +142,15 @@ whenEmpty s e | all isSpace s = e
               | otherwise     = s
 
 convert :: Feed.Feed -> Feed
-convert feed = newEmptyFeed (kind feed)
+convert f = newEmptyFeed (kind f)
   & feedTitle       .~
-                       T.pack (whenEmpty (Feed.getFeedTitle feed)
+                       T.pack (whenEmpty (Feed.getFeedTitle f)
                                          "(no title)")
-  & feedHome        .~ T.pack (maybe "" id $ Feed.getFeedHome feed)
-  & feedHTML        .~ T.pack (maybe "" id $ Feed.getFeedHTML feed)
-  & feedDescription .~ T.pack (maybe "" id $ Feed.getFeedDescription feed)
-  & feedLastUpdate  .~ T.pack (maybe "" id $ Feed.getFeedLastUpdate feed)
-  & feedItems       .~ map convertItems (Feed.feedItems feed)
+  & feedHome        .~ T.pack (maybe "" id $ Feed.getFeedHome f)
+  & feedHTML        .~ T.pack (maybe "" id $ Feed.getFeedHTML f)
+  & feedDescription .~ T.pack (maybe "" id $ Feed.getFeedDescription f)
+  & feedLastUpdate  .~ T.pack (maybe "" id $ Feed.getFeedLastUpdate f)
+  & feedItems       .~ map convertItems (Feed.feedItems f)
   where
   kind :: Feed.Feed -> FeedKind
   kind (Feed.AtomFeed _)  = AtomKind
@@ -178,13 +167,14 @@ convertItems i = newEmptyItem
   & itemDescription .~ T.pack (maybe "" id $ Feed.getItemDescription i)
 
 defaultAnn :: Feed -> AnnFeed
-defaultAnn feed = feed & feedItems.traverse %~ AnnItem False
+defaultAnn f = AnnFeed (f & feedItems.traverse %~ flip AnnItem False) []
 
 ------------------------------------------------------------------------
 
 instance Serialize FeedKind where
-instance Serialize Item where
-instance Serialize AnnItem where
+instance Serialize Item     where
+instance Serialize AnnFeed  where
+instance Serialize AnnItem  where
 instance Serialize a => Serialize (Feed' a) where
 
 instance Serialize Text where

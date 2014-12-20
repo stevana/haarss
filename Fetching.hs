@@ -25,29 +25,17 @@ import Text.Feed.Constructor
   (newFeed, FeedKind(AtomKind), withFeedTitle, withFeedHome)
 import Text.Feed.Import (parseFeedString)
 
--- XXX: Debugging
-import Constants
-import Config
+import Fetching.History
+import Feeds (AnnFeed(..), defaultAnn, history, convert)
 
 ------------------------------------------------------------------------
 
-data Download a
-  = Success UTCTime a
-  | Failure UTCTime FailureReason
-
-data FailureReason
-  = DownloadFailure HttpException
-  | ParseFailure String
-  | Timeout
-  | Unknown SomeException
-  deriving Show -- XXX: debugging
-
 download :: forall a. [String] -> IO () ->
-            (BS.ByteString -> Either String a) -> IO [Download a]
+            (BS.ByteString -> Either String a) -> IO [(Maybe a, History)]
 download urls callback parser = do
 
   alive  <- newTVarIO $ length urls
-  result <- newArray_ (1, length urls) :: IO (IOArray Int (Download a))
+  result <- newArray_ (1, length urls) :: IO (IOArray Int (Maybe a, History))
 
   forM_ (zip [1..] urls) $ \(idx, url) -> do
     forkIO (fetch idx url alive result)
@@ -61,7 +49,7 @@ download urls callback parser = do
     n <- readTVar alive
     check (n == 0)
 
-  fetch :: Int -> String -> TVar Int -> IOArray Int (Download a) -> IO ()
+  fetch :: Int -> String -> TVar Int -> IOArray Int (Maybe a, History) -> IO ()
   fetch idx url alive result = do
 
     time <- getCurrentTime
@@ -74,16 +62,17 @@ download urls callback parser = do
     do { mr <- timeout (30 * 1000000) $ getWith opts url
 
        ; case mr of
-           Nothing -> write $ Failure time $ Timeout
+           Nothing -> write (Nothing, Failure time $ TimeoutFailure)
            Just r -> case r^.responseBody.to parser of
-             Left err -> write $ Failure time $ ParseFailure err
-             Right x  -> write $ Success time x
+             Left err -> write (Nothing, Failure time $ ParseFailure err)
+             Right x  -> write (Just x, Success time)
 
        } `catches`
            [ Handler (\(e :: HttpException) ->
-               write $ Failure time $ DownloadFailure e)
-           , Handler (\(e :: SomeException) ->
-               write $ Failure time $ Unknown e)
+               write (Nothing, Failure time $
+                       DownloadFailure (simplifyHttpException e)))
+           , Handler (\(_ :: SomeException) ->
+               write (Nothing, Failure time UnknownFailure))
            ]
 
     callback
@@ -95,20 +84,23 @@ feedParser :: BS.ByteString -> Either String Feed
 feedParser = maybe (Left "failed to parse feed") Right .
            parseFeedString . map (chr . fromEnum) . BS.unpack
 
-downloadFeeds :: [String] -> IO () -> IO [Feed]
+downloadFeeds :: [String] -> IO () -> IO [AnnFeed]
 downloadFeeds urls callback =
   map downloadToFeed . zip urls <$> download urls callback feedParser
   where
-  -- XXX: Should be returning an annotated feed here?
-  downloadToFeed :: (String, Download Feed) -> Feed
-  downloadToFeed (_,   Success _ f) = f
-  downloadToFeed (url, Failure _ _) =
-    withFeedTitle ("! " ++ url) $
-    withFeedHome url $
-    newFeed AtomKind
+  downloadToFeed :: (String, (Maybe Feed, History)) -> AnnFeed
+  downloadToFeed (_,   (Just f,  h)) = defaultAnn (convert f) &
+                                         history .~ [h]
+  downloadToFeed (url, (Nothing, h)) = defaultAnn (convert f) &
+                                         history .~ [h]
+    where
+    f = withFeedTitle url $
+        withFeedHome url $
+        newFeed AtomKind
 
 ------------------------------------------------------------------------
 
+{-
 downloadDebug :: [String] -> IO ()
 downloadDebug urls = do
   dls <- download urls (return ()) feedParser
@@ -121,3 +113,4 @@ runTest = do
   cfgPath <- getConfigPath
   cfg <- read <$> readFile cfgPath
   downloadDebug (cfg^.urls)
+-}

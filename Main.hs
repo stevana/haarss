@@ -180,9 +180,7 @@ setupReactive config vty iniModel eEvent = do
       eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
         where
         io :: IO [AnnFeed]
-        io = do
-          fs <- downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
-          return $ map (defaultAnn . convert) fs
+        io = downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
 
   rec
     let eFeed :: Event AnnFeed
@@ -194,9 +192,7 @@ setupReactive config vty iniModel eEvent = do
           getFeedUrl m = config^.urls^?! ix (m^.browsing.feeds.prev.to length)
 
           io :: String -> IO AnnFeed
-          io url = do
-            [feed] <- downloadFeeds [url] (sync (pushFeedDownloaded ()))
-            return $ defaultAnn $ convert feed
+          io url = head <$> downloadFeeds [url] (sync (pushFeedDownloaded ()))
 
 
     bModel <- let cmdSem :: Command -> (Model -> Model) -> Event (Model -> Model)
@@ -218,7 +214,7 @@ setupReactive config vty iniModel eEvent = do
 
                    , cmdSem MarkAllAsRead $ \model ->
                        if browsingFeeds model
-                       then model & browsing.feeds.traverse.feedItems.traverse.isRead .~ True
+                       then model & browsing.feeds.traverse.feed.feedItems.traverse.isRead .~ True
                        else model & browsing._TheItems._2   .traverse.isRead .~ True
 
                    , cmdSem UpdateFeed $ \model ->

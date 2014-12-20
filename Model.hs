@@ -74,12 +74,13 @@ move' In  b@(TheFeeds fs)     = if null is
                                    then b
                                    else TheItems fs (makeZip is)
   where
-  is = fs^.curr.feedItems
+  is = fs^.curr.feed.feedItems
 move' Out b@(TheFeeds _)      = b
 move' dir (TheFeeds fs)       = TheFeeds (moveZip dir fs)
 move' In  (TheItems fs is)    = TheText fs (is & curr.isRead .~ True)
                                            (is^.curr) 0
-move' Out (TheItems fs is)    = TheFeeds (fs & curr.feedItems .~ closeZip is)
+move' Out (TheItems fs is)    = TheFeeds (fs & curr.feed.feedItems .~
+                                           closeZip is)
 move' dir (TheItems fs is)    = TheItems fs (moveZip dir is)
 move' In  (TheText fs is _ _) = TheItems fs is
 move' Out (TheText fs is _ _) = TheItems fs is
