@@ -4,6 +4,7 @@
 module Feeds where
 
 import Test.QuickCheck
+import Data.Char (isSpace)
 import Data.List
 import Control.Lens
 import Data.Text (Text)
@@ -57,12 +58,15 @@ data Feed' is = Feed
   , _feedLastUpdate  :: Date
   , _feedItems       :: is
   }
-  deriving (Eq, Show, Read, Functor, Generic)
+  deriving (Eq, Functor, Generic)
 
 data FeedKind = AtomKind | RSS1Kind | RSS2Kind
-  deriving (Eq, Show, Read, Enum, Generic)
+  deriving (Eq, Enum, Generic)
 
 makeLenses ''Feed'
+
+instance Show (Feed' is) where
+  show f = f^.feedTitle.to T.unpack
 
 data Item = Item
   { _itemTitle       :: Text
@@ -71,7 +75,7 @@ data Item = Item
   , _itemFeedLink    :: URL
   , _itemDescription :: Text
   }
-  deriving (Eq, Ord, Show, Read, Generic)
+  deriving (Eq, Ord, Generic)
 
 makeLenses ''Item
 
@@ -115,9 +119,12 @@ data AnnItem = AnnItem
   { _isRead :: Bool
   , _item   :: Item
   }
-  deriving (Show, Read, Generic)
+  deriving Generic
 
 makeLenses ''AnnItem
+
+instance Show AnnItem where
+  show i = i^.item.itemTitle.to T.unpack
 
 type AnnFeed = Feed' [AnnItem]
 
@@ -141,9 +148,15 @@ mergeItems old new = map (\n -> keepOldAnn (n^.item) old) new
 
 -- XXX: This is just hack while we find/write a better feed library...
 
+whenEmpty :: String -> String -> String
+whenEmpty s e | all isSpace s = e
+              | otherwise     = s
+
 convert :: Feed.Feed -> Feed
 convert feed = newEmptyFeed (kind feed)
-  & feedTitle       .~ T.pack (Feed.getFeedTitle feed)
+  & feedTitle       .~
+                       T.pack (whenEmpty (Feed.getFeedTitle feed)
+                                         "(no title)")
   & feedHome        .~ T.pack (maybe "" id $ Feed.getFeedHome feed)
   & feedHTML        .~ T.pack (maybe "" id $ Feed.getFeedHTML feed)
   & feedDescription .~ T.pack (maybe "" id $ Feed.getFeedDescription feed)
