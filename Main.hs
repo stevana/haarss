@@ -54,7 +54,6 @@ import Data.Serialize
 
 import Control.Applicative
 import Control.Lens hiding (view)
-import qualified Data.Text as T
 import Control.Exception
 import Control.Monad
 import System.Exit
@@ -223,8 +222,8 @@ setupReactive config vty iniModel eEvent = do
                    , cmdSem UpdateFeeds $ \model ->
                        model & downloading .~ config^.urls.to length
 
-                   , (\feed model ->
-                       model & browsing.feeds.curr %~ flip Feeds.merge feed) <$> eFeed
+                   , (\f model ->
+                       model & browsing.feeds.curr %~ flip Feeds.merge f) <$> eFeed
 
                    -- XXX: this loses the current position (maybe not bad?)
                    , (\fs model -> model & browsing.feeds .~ makeZip
@@ -245,14 +244,9 @@ setupReactive config vty iniModel eEvent = do
         helper model = do
           url <- getItemUrl model
           return $ do
-            _ <- rawSystem (config^.browser) [url]
+            _ <- createProcess (proc (config^.browser) [url])
+                   { std_err = CreatePipe }
             return ()
-
-        getItemUrl :: Model -> Maybe String
-        getItemUrl m = m^.browsing._TheItems._2.curr.item.itemLink.to (Just . T.unpack)
-          -- Just $ T.unpack $ is^.curr.item.itemLink
---        getItemUrl _ = Nothing
-
 
   _ <- listen (value bModel) (\model -> view vty (model, ""))
   _ <- listen eOpenUrl       id

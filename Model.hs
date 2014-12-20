@@ -162,6 +162,14 @@ move dir m = m' & vty %~ moveVty dir (m'^.browsing.to total)
 
 ------------------------------------------------------------------------
 
+getItemUrl :: Model -> Maybe String
+getItemUrl m = case m^.browsing of
+  TheFeeds _       -> Nothing
+  TheItems _ is    -> is^.curr.item.itemLink.to (Just . T.unpack)
+  TheText  _ _ i _ -> i^.item.itemLink. to (Just . T.unpack)
+
+------------------------------------------------------------------------
+
 instance Show Model where
   show m = unlines
     [ "Browsing: " ++ m^.browsing.to show
