@@ -1,29 +1,22 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, DeriveFunctor,
-             DeriveFoldable, DeriveTraversable, DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveFoldable,
+             DeriveTraversable, DeriveGeneric #-}
 
 module Model where
 
 import Control.Applicative
-import Control.Lens hiding (below)
-
-import Data.Char (isSpace)
-import Data.Monoid
-import Data.List
+import Control.Lens
 import Data.Foldable (Foldable)
-import Data.Serialize
-import qualified Data.ByteString as BS
-
 import GHC.Generics (Generic)
-
-import qualified Data.Text as T
-
-import System.Directory (doesFileExist)
-import System.Environment (getEnv)
-import System.FilePath ((</>))
 
 import Constants
 import Config
 import Feeds
+
+-- XXX:
+import Data.Serialize
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import System.Directory (doesFileExist)
 
 ----------------------------------------------------------------------
 
@@ -32,7 +25,7 @@ data Zip a = Zip
   , _curr :: a
   , _next :: [a]
   }
-  deriving (Show, Read, Functor, Foldable, Traversable, Generic)
+  deriving (Functor, Foldable, Traversable, Generic)
 
 makeLenses ''Zip
 
@@ -59,279 +52,170 @@ moveZip Bot  z@(Zip xs c ys)     = case ys of
                                                   (last ys) []
 moveZip _    z                   = z
 
-data VtyInfo = VtyInfo
-  { _above    :: Int
-  , _position :: Int
-  , _below    :: Int
-  , _maxRows  :: Int
-  }
-  deriving (Show, Read, Generic)
+------------------------------------------------------------------------
 
-makeLenses ''VtyInfo
+type Scroll = Int
 
-emptyInfo :: VtyInfo
-emptyInfo = VtyInfo 0 0 0 0
+data Browsing
+  = TheFeeds (Zip AnnFeed)
+  | TheItems (Zip AnnFeed) (Zip AnnItem)
+  | TheText  (Zip AnnFeed) (Zip AnnItem) AnnItem Scroll
+  deriving Generic
+
+makePrisms ''Browsing
+
+feeds :: Lens' Browsing (Zip AnnFeed)
+feeds k (TheFeeds fs)       = TheFeeds <$> k fs
+feeds k (TheItems fs is)    = (\fs' -> TheItems fs' is)    <$> k fs
+feeds k (TheText fs is i s) = (\fs' -> TheText fs' is i s) <$> k fs
+
+move' :: Dir -> (Browsing -> Browsing)
+move' In  b@(TheFeeds fs)     = if null is
+                                   then b
+                                   else TheItems fs (makeZip is)
+  where
+  is = fs^.curr.feedItems
+move' Out b@(TheFeeds _)      = b
+move' dir (TheFeeds fs)       = TheFeeds (moveZip dir fs)
+move' In  (TheItems fs is)    = TheText fs (is & curr.isRead .~ True)
+                                           (is^.curr) 0
+move' Out (TheItems fs is)    = TheFeeds (fs & curr.feedItems .~ closeZip is)
+move' dir (TheItems fs is)    = TheItems fs (moveZip dir is)
+move' In  (TheText fs is _ _) = TheItems fs is
+move' Out (TheText fs is _ _) = TheItems fs is
+move' dir (TheText fs is _ _) = TheText fs (is' & curr.isRead .~ True)
+                                           (is'^.curr) 0
+  where
+  is' = moveZip dir is
+
+type Height = Int
+
+data VtyStuff
+  = ForFeeds Position Height
+  | ForItems Position Position Height
+  deriving Generic
+
+initialVtyStuff :: VtyStuff
+initialVtyStuff = ForFeeds (Position 0 0) 0
+
+height :: Lens' VtyStuff Height
+height k (ForFeeds p h)   = ForFeeds p <$> k h
+height k (ForItems p q h) = ForItems p q <$> k h
+
+position :: Lens' VtyStuff Position
+position k (ForFeeds p h)   = (\p' -> ForFeeds p' h) <$> k p
+position k (ForItems p q h) = (\q' -> ForItems p q' h) <$> k q
 
 data Model = Model
-  { _feeds       :: Zip AnnFeed
-  , _info        :: VtyInfo
-  , _viewing     :: View
+  { _browsing    :: Browsing
   , _downloading :: Int
+  , _vty         :: VtyStuff
   }
-  deriving (Show, Read, Generic)
+  deriving Generic
 
-data View
-  = FeedsView
-  | ItemsView
-      { _items    :: Zip AnnItem
-      , _viewText :: Bool
-      }
-  deriving (Show, Read, Generic)
+data Position = Position
+  { _window :: Int
+  , _cursor :: Int
+  }
+  deriving Generic
 
+makeLenses ''Position
 makeLenses ''Model
-makeLenses ''View
-makePrisms ''View
 
-pretty :: Model -> String
-pretty m =
-  prettyZip (m^.feeds) (show . _feedTitle)
-  ++
-  unlines
-    [ ""
-    , "Viewing: " ++ m^.viewing.to prettyView
+browsingFeeds :: Model -> Bool
+browsingFeeds m = maybe False (const True) $ m ^? browsing._TheFeeds
+
+moveVty :: Dir -> Int -> (VtyStuff -> VtyStuff)
+moveVty Top _    v = v & position.cursor .~ 0
+                       & position.window .~ 0
+moveVty Bot tot  v = v & position.cursor .~ min tot (v^.height)
+                       & position.window .~ max 0 (tot - v^.height)
+moveVty Up _     v
+  | v^.position.cursor == 0         = v & position.window %~ max 0 . pred
+  | otherwise                       = v & position.cursor -~ 1
+moveVty Down tot v
+  | v^.position.cursor == tot       = v
+  | v^.position.cursor == v^.height = v & position.window %~
+      if v^.position.window + v^.height < tot
+         then succ
+         else id
+  | otherwise                       = v & position.cursor +~ 1
+moveVty In  _ (ForFeeds p h)        = ForItems p (Position 0 0) h
+moveVty Out _ v@(ForFeeds _ _)      = v
+moveVty In  _ v@(ForItems _ _ _)    = v
+moveVty Out _ (ForItems p _ h)      = ForFeeds p h
+
+move :: Dir -> (Model -> Model)
+move dir m = m' & vty %~ moveVty dir (m'^.browsing.to total)
+  where
+  m' = m & browsing %~ move' dir
+
+  -- This is really total-1.
+  total :: Browsing -> Int
+  total = max 0 . pred . length . closeZip . things
+    where
+    things :: Browsing -> Zip (Either AnnFeed AnnItem)
+    things (TheFeeds fs)      = fmap Left fs
+    things (TheItems _ is)    = fmap Right is
+    things (TheText _ is _ _) = fmap Right is
+
+------------------------------------------------------------------------
+
+instance Show Model where
+  show m = unlines
+    [ "Browsing: " ++ m^.browsing.to show
     , ""
-    , "Above: "    ++ m^.info.above.to show
-    , "Position: " ++ m^.info.position.to show
-    , "Below: "    ++ m^.info.below.to show
-    , "Max rows: " ++ m^.info.maxRows.to show
-    ]
-  where
-  prettyZip :: Zip a -> (a -> String) -> String
-  prettyZip z s = unlines
-    [ "Prev: " ++ z^.prev.traverse.to s
-    , "Curr: " ++ z^.curr.to s
-    , "Next: " ++ z^.next.traverse.to s
+    , "VtyStuff: " ++ m^.vty.to show
+    , ""
+    , "Downloading: " ++ m^.downloading.to show
     ]
 
-  prettyView :: View -> String
-  prettyView FeedsView            = "FeedsView"
-  prettyView (ItemsView is False) = "ItemsView \n\n" ++
-                                       prettyZip is (show . _itemTitle . _item)
-  prettyView (ItemsView is True)  = "TextView"
+instance Show Browsing where
+  show (TheFeeds fs)     = "TheFeeds." ++ show fs
+  show (TheItems _ is)   = "TheItems." ++ show is
+  show (TheText _ _ i s) = unlines
+    [ "TheText: " ++ i^.item.itemDescription.to show
+    , ""
+    , "Scroll: " ++ show s
+    ]
 
-viewIso :: Iso' View (Either () (Zip AnnItem, Bool))
-viewIso = iso t f
-  where
-  t FeedsView        = Left ()
-  t (ItemsView is b) = Right (is, b)
+indent :: [String] -> [String]
+indent = (:) "\n" . map ("  " ++)
 
-  f (Left _)        = FeedsView
-  f (Right (is, b)) = ItemsView is b
+instance Show a => Show (Zip a) where
+  show z = unlines $ indent
+    [ "prev: " ++ z^.prev.to show
+    , "curr: " ++ z^.curr.to show
+    , "next: " ++ z^.next.to show
+    ]
 
-isFeedsView :: Model -> Bool
-isFeedsView (Model _ _ FeedsView _) = True
-isFeedsView _                       = False
+instance Show VtyStuff where
+  show v = unlines $ indent
+    [ "window: " ++ v^.position.window.to show
+    , "cursor: " ++ v^.position.cursor.to show
+    , "height: " ++ v^.height.to show
+    ]
 
 ------------------------------------------------------------------------
 
 makeModel :: [AnnFeed] -> Model
-makeModel []       =
-  Model (Zip [] (defaultAnn $ newEmptyFeed AtomKind) []) emptyInfo FeedsView 0
-makeModel (f : fs) =
-  Model (Zip [] f                       fs) emptyInfo FeedsView 0
-
-emptyFeed :: Feed
-emptyFeed = newEmptyFeed AtomKind
-
-dummyFeeds :: Int -> [Feed]
-dummyFeeds = reverse . go
-  where
-  go :: Int -> [Feed]
-  go 0 = []
-  go n = feed : go (n - 1)
-    where
-    feed = addDummyItems (emptyFeed & feedTitle .~ "Feed " <> T.pack (show n)) 15
-
-addDummyItems :: Feed -> Int -> Feed
-addDummyItems feed = foldr addItem feed . reverse . go
-  where
-  go 0 = []
-  go n = mkItem n : go (n - 1)
-    where
-    mkItem m = newEmptyItem
-             & itemTitle       .~ ("Item " <> T.pack (show m))
-             & itemDescription .~ T.pack (concat $ replicate 10 "blah blah")
+makeModel fs = Model (TheFeeds (makeZip fs)) 0 initialVtyStuff
 
 initialModel :: Config -> Model
 initialModel cfg = makeModel fs
   where
   fs :: [AnnFeed]
-  fs = cfg^.urls & mapped %~ \url -> defaultAnn $ flip addDummyItems 1 $
+  fs = cfg^.urls & mapped %~ \url -> defaultAnn $
          newEmptyFeed AtomKind & feedTitle .~ T.pack url
                                & feedHome  .~ T.pack url
 
-------------------------------------------------------------------------
-
-moveModel :: Dir -> (Model -> Model)
-moveModel dir m = case m^.viewing of
-
-  FeedsView -> case dir of
-    In  -> m & viewing .~ ItemsView (m^.feeds.curr.feedItems.to makeZip) False
-    Out -> error "exiting" -- XXX
-    _   -> m & feeds %~ moveZip dir
-
-  ItemsView is txt -> case dir of
-    In  -> m & viewing .~ ItemsView (is & curr.isRead .~ True) (not txt)
-    Out -> if txt
-              then m & viewing .~ ItemsView is False
-              else m & viewing .~ FeedsView
-                     & feeds.curr.feedItems .~ closeZip is
-    _   -> if txt
-              then m & viewing .~ ItemsView (moveZip dir is &
-                                             curr.isRead .~ True) txt
-              else m & viewing .~ ItemsView (moveZip dir is) txt
-
-data VtyModel = VtyModel
-  { _height   :: Int
-  , _browsing :: VtyBrowsing
-  }
-
-data VtyCursor = VtyCursor
-  { _dropped :: Int
-  , _index   :: Int
-  , _total   :: Int
-  }
-
-data VtyBrowsing
-  = FeedsBrowse { _cursor :: VtyCursor }
-  | ItemsBrowse VtyCursor VtyCursor
-
-moveVtyInfo :: Dir -> (Model -> Model)
-moveVtyInfo dir m = case m^.viewing of
-
-  FeedsView -> case dir of
-    Down -> m & info.position +~ 1
-
-move :: Dir -> (Model -> Model)
-move = moveModel
+-- XXX: Better name? Explain magic 6.
+setHeight :: Int -> Model -> Model
+setHeight h m = m & vty.height .~ h - 6
 
 ------------------------------------------------------------------------
-{-
 
-move :: Dir -> (Model -> Model)
-move = execState . move'
-
--- XXX: remove the bool?
-move' :: Dir -> State Model Bool
-move' dir = do
-  Model fs i v dl <- get
-  case v of
-    FeedsView -> case dir of
-      Down -> case moveZip Down fs of
-        Nothing  -> return False
-        Just fs' -> do
-          feeds .= fs'
-          let pos' = i^.position + 1
-          info.position .= pos'
-          when (pos' > i^.below) $ do
-            info.below .= pos'
-            info.above += 1
-          return False
-
-      Up -> case moveZip Up fs of
-        Nothing  -> return False
-        Just fs' -> do
-          feeds .= fs'
-          let pos' = i^.position - 1
-          info.position .= pos'
-          when (pos' < i^.above) $ do
-            info.above .= pos'
-            info.below -= 1
-          return False
-
-      Top -> case moveZip Top fs of
-        Nothing  -> return False
-        Just fs' -> do
-          feeds .= fs'
-          info.position .= 0
-          info.above .= 0
-          info.below .= i^.maxRows
-          return False
-
-      Bot -> case moveZip Bot fs of
-        Nothing  -> return False
-        Just fs' -> do
-          feeds .= fs'
-          let pl = fs'^.prev.to genericLength
-          info.position .= pl
-          info.above .= pl - i^.maxRows
-          info.below .= pl
-          return False
-
-      Out -> return True
-
-      In -> do
-        put $ Model fs i (ItemsView (makeZip (fs^.curr.feedItems)) False) dl
-        return False
-
-    ItemsView is si -> case dir of
-      Out -> if si
-                then do
-                  put $ Model fs i (ItemsView is False) dl
-                  return False
-                else do
-                  put $ Model (fs & curr.feedItems .~ closeZip is) i FeedsView dl
-                  return False
-
-      In -> do
-        put $ Model fs i (ItemsView (is & curr.isRead .~ True) (not si)) dl
-        return False
-
-      Down -> case moveZip Down is of
-        Nothing  -> return False
-        Just is' -> do
-          viewing.items .= is'
-          let pos' = i^.position + 1
-          info.position .= pos'
-          when (pos' > i^.below) $ do
-            info.below .= pos'
-            info.above += 1
-          return False
-
-      Up -> case moveZip Up is of
-        Nothing  -> return False
-        Just is' -> do
-          viewing.items .= is'
-          let pos' = i^.position - 1
-          info.position .= pos'
-          when (pos' < i^.above) $ do
-            info.above .= pos'
-            info.below -= 1
-          return False
-
-      -- XXX: move Top as for feeds in case si is false!
-      Top -> case moveZip Top is of
-        Nothing  -> return False
-        Just is' -> do
-          viewing.items .= is'
-          info.position .= 0
-          info.above .= 0
-          info.below .= i^.maxRows
-          return False
-
-      Bot -> case moveZip Bot is of
-        Nothing  -> return False
-        Just is' -> do
-          viewing.items .= is'
-          let pl = is'^.prev.to genericLength
-          info.position .= pl
-          info.above .= pl - i^.maxRows
-          info.below .= pl
-          return False
-
--}
-
-------------------------------------------------------------------------
+-- XXX: Move to Model.Serialise, add writeModel
 
 readSavedModel :: Config -> IO Model
 readSavedModel cfg = do
@@ -343,16 +227,13 @@ readSavedModel cfg = do
     else do
       em <- decode <$> BS.readFile modelPath
       case em of
-        Left err -> error $ "readSavedModel: " ++ err
-        Right m  -> return m
-
--- XXX: Better name?
-setHeight :: Int -> Model -> Model
-setHeight height m = m & info.maxRows .~ height - 5
+        Left _  -> error $ "readSavedModel: failed to restore saved model."
+        Right m -> return m
 
 ------------------------------------------------------------------------
 
 instance Serialize Model where
-instance Serialize View where
-instance Serialize VtyInfo where
+instance Serialize Browsing where
+instance Serialize VtyStuff where
+instance Serialize Position where
 instance Serialize a => Serialize (Zip a) where

@@ -99,7 +99,10 @@ enter = Vty.EvKey Vty.KEnter []
 ------------------------------------------------------------------------
 
 data SaveModel = SaveModel Model
-  deriving (Show, Typeable)
+  deriving (Typeable)
+
+instance Show SaveModel where
+  show _ = "SaveModel"
 
 instance Exception SaveModel where
 
@@ -188,7 +191,7 @@ setupReactive config vty iniModel eEvent = do
                                           bModel
           where
           getFeedUrl :: Model -> String
-          getFeedUrl m = config^.urls^?! ix (m^.feeds.prev.to length)
+          getFeedUrl m = config^.urls^?! ix (m^.browsing.feeds.prev.to length)
 
           io :: String -> IO AnnFeed
           io url = do
@@ -205,18 +208,18 @@ setupReactive config vty iniModel eEvent = do
                    , cmdSem (Move Down) $ move Down
                    , cmdSem (Move Bot)  $ move Bot
                    , cmdSem (Move In)   $ move In
-                   , cmdSem (Move Out)  $ \model -> if isFeedsView model
+                   , cmdSem (Move Out)  $ \model -> if browsingFeeds model
                                                     then throw $ SaveModel model
                                                     else move Out model
                    , cmdSem Redraw id
 
                    , cmdSem ToggleReadStatus $
-                       viewing._ItemsView._1.curr.isRead %~ not
+                       browsing._TheItems._2.curr.isRead %~ not
 
                    , cmdSem MarkAllAsRead $ \model ->
-                       if isFeedsView model
-                       then model & feeds.traverse.feedItems.traverse.isRead .~ True
-                       else model & viewing._ItemsView._1   .traverse.isRead .~ True
+                       if browsingFeeds model
+                       then model & browsing.feeds.traverse.feedItems.traverse.isRead .~ True
+                       else model & browsing._TheItems._2   .traverse.isRead .~ True
 
                    , cmdSem UpdateFeed $ \model ->
                        model & downloading .~ 1
@@ -225,11 +228,11 @@ setupReactive config vty iniModel eEvent = do
                        model & downloading .~ config^.urls.to length
 
                    , (\feed model ->
-                       model & feeds.curr %~ flip Feeds.merge feed) <$> eFeed
+                       model & browsing.feeds.curr %~ flip Feeds.merge feed) <$> eFeed
 
                    -- XXX: this loses the current position (maybe not bad?)
-                   , (\fs model -> model & feeds .~ makeZip
-                         (mergeFeeds (closeZip (model^.feeds)) fs)) <$> eFeeds
+                   , (\fs model -> model & browsing.feeds .~ makeZip
+                         (mergeFeeds (closeZip (model^.browsing.feeds)) fs)) <$> eFeeds
                          -- mergeFeeds (closeZip $ model^.feeds) fs) <$> eFeeds
 
                          -- makeModel feeds (model^.info.maxRows) <$> eFeeds
@@ -250,9 +253,9 @@ setupReactive config vty iniModel eEvent = do
             return ()
 
         getItemUrl :: Model -> Maybe String
-        getItemUrl (Model _ _ (ItemsView is _) _) =
-          Just $ T.unpack $ is^.curr.item.itemLink
-        getItemUrl _ = Nothing
+        getItemUrl m = m^.browsing._TheItems._2.curr.item.itemLink.to (Just . T.unpack)
+          -- Just $ T.unpack $ is^.curr.item.itemLink
+--        getItemUrl _ = Nothing
 
 
   _ <- listen (value bModel) (\model -> view vty (model, ""))
