@@ -91,7 +91,11 @@ feedImage f = horizCat
   ]
 
 itemImage :: AnnItem -> Image
-itemImage i = char defAttr ' ' <|> i^.item.itemTitle.to (text' defAttr)
+itemImage i = char defAttr ' ' <|> i^.item.itemTitle.to (text' attr)
+  where
+  attr :: Attr
+  attr | i^.isRead = defAttr
+       | otherwise = boldAttr
 
 focusedFeedImage :: AnnFeed -> Image
 focusedFeedImage f = horizCat
@@ -101,7 +105,15 @@ focusedFeedImage f = horizCat
   ]
 
 focusedItemImage :: AnnItem -> Image
-focusedItemImage i = i^.item.itemTitle.to focusedText
+focusedItemImage i = horizCat
+  [ char standoutAttr ' '
+  , text' attr (i^.item.itemTitle)
+  , charFill standoutAttr ' ' (100 :: Int) 1
+  ]
+  where
+  attr :: Attr
+  attr | i^.isRead = standoutAttr
+       | otherwise = standoutBoldAttr
 
 focusedText :: Text -> Image
 focusedText t = char standoutAttr ' ' <|> text' standoutAttr t
@@ -124,11 +136,11 @@ drawModel m =
 ------------------------------------------------------------------------
 
 
-standoutAttr, boldAttr, standout_boldAttr, underline_attr :: Attr
+standoutAttr, boldAttr, standoutBoldAttr, underlineAttr :: Attr
 standoutAttr = defAttr `withStyle` standout
 boldAttr     = defAttr `withStyle` bold
-standout_boldAttr = standoutAttr `withStyle` bold
-underline_attr = defAttr `withStyle` underline
+standoutBoldAttr = standoutAttr `withStyle` bold
+underlineAttr = defAttr `withStyle` underline
 
 {-
 title :: AnnItem -> T.Text
