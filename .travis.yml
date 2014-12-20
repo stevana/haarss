@@ -1,0 +1,25 @@
+language: haskell
+
+ghc:
+  - 7.8.3
+  - 7.6.3
+  - 7.4.2
+
+install:
+  - cabal install cabal-install
+  - cabal install --only-dependencies
+
+script:
+  - cabal configure
+  - cabal build
+  - cabal install
+
+matrix:
+  fast_finish: true
+
+branches:
+  only:
+    - master
+
+notifications:
+  email: false
