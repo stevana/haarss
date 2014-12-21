@@ -14,13 +14,13 @@ cabal-version:       >=1.8
 ------------------------------------------------------------------------
 
 flag network-uri
-   description: Get Network.URI from the network-uri package
-   default: True
+  description: Get Network.URI from the network-uri package
+  default: True
 
 executable haarss
   hs-source-dirs: src
   main-is:        Main.hs
-  other-modules:  Feeds, Fetching, Model, View
+  ghc-options:    -Wall -threaded -with-rtsopts=-N
 
   if flag(network-uri)
     build-depends: network-uri >= 2.6, network >= 2.6
@@ -49,14 +49,9 @@ executable haarss
     lens >= 3.10.0 && < 5,
     mtl >= 2.1.1 && < 2.3,
     process >= 1.0.1.0 && < 1.3,
-    -- QuickCheck >= 2.5 && < 2.8,
     sodium >= 0.10.0.0 && < 0.12.0.0,
     stm >= 2.2.0.0 && < 2.4.3,
-    -- tagsoup >= 0.12.8 && < 0.14,
     text >= 0.11 && < 1.3,
     time >= 1.3 && < 1.6,
-    unix >= 2.5.0.0 && < 2.8,
     vty >= 5 && < 6,
     wreq >= 0.3.0.0 && < 0.4
-
-  ghc-options:   -Wall -fno-warn-unused-do-bind -threaded -with-rtsopts=-N
