@@ -30,12 +30,10 @@ executable haarss
   if impl(ghc < 7.6)
     build-depends:
       directory >= 1.0 && < 1.2,
-      old-time >= 1.0 && < 1.2,
       ghc-prim >= 0.2.0.0 && < 0.3.1.0
   else
     build-depends:
-      directory == 1.2.*,
-      time == 1.4.*
+      directory == 1.2.*
 
   build-depends:
     array >= 0.1 && < 0.6,
@@ -56,6 +54,7 @@ executable haarss
     stm >= 2.2.0.0 && < 2.4.3,
     -- tagsoup >= 0.12.8 && < 0.14,
     text >= 0.11 && < 1.3,
+    time >= 1.3 && < 1.6,
     unix >= 2.5.0.0 && < 2.8,
     vty >= 5 && < 6,
     wreq >= 0.3.0.0 && < 0.4
