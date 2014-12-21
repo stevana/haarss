@@ -1,10 +1,11 @@
 {-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveFoldable,
-             DeriveTraversable, DeriveGeneric #-}
+             DeriveTraversable, DeriveGeneric, RecordWildCards #-}
 
 module Model where
 
 import Control.Applicative
 import Control.Lens
+import Data.Text.Lens
 import Data.Foldable (Foldable)
 import GHC.Generics (Generic)
 
@@ -15,6 +16,7 @@ import Feeds
 -- XXX:
 import Data.Serialize
 import qualified Data.ByteString as BS
+import Data.Text (Text)
 import qualified Data.Text as T
 import System.Directory (doesFileExist)
 
@@ -94,18 +96,21 @@ type Height = Int
 data VtyStuff
   = ForFeeds Position Height
   | ForItems Position Position Height
+  | ForText  Position Position Height
   deriving Generic
 
 initialVtyStuff :: VtyStuff
 initialVtyStuff = ForFeeds (Position 0 0) 0
 
 height :: Lens' VtyStuff Height
-height k (ForFeeds p h)   = ForFeeds p <$> k h
+height k (ForFeeds p h)   = ForFeeds p   <$> k h
 height k (ForItems p q h) = ForItems p q <$> k h
+height k (ForText p q h)  = ForText p q  <$> k h
 
 position :: Lens' VtyStuff Position
-position k (ForFeeds p h)   = (\p' -> ForFeeds p' h) <$> k p
+position k (ForFeeds p h)   = (\p' -> ForFeeds p' h)   <$> k p
 position k (ForItems p q h) = (\q' -> ForItems p q' h) <$> k q
+position k (ForText p q h)  = (\q' -> ForText p q' h)  <$> k q
 
 data Model = Model
   { _browsing    :: Browsing
@@ -143,8 +148,10 @@ moveVty Down tot v
   | otherwise                       = v & position.cursor +~ 1
 moveVty In  _ (ForFeeds p h)        = ForItems p (Position 0 0) h
 moveVty Out _ v@(ForFeeds _ _)      = v
-moveVty In  _ v@(ForItems _ _ _)    = v
+moveVty In  _ (ForItems p q h)      = ForText p q h
 moveVty Out _ (ForItems p _ h)      = ForFeeds p h
+moveVty In  _ (ForText p q h)       = ForItems p q h
+moveVty Out _ (ForText p q h)       = ForItems p q h
 
 move :: Dir -> (Model -> Model)
 move dir m = m' & vty %~ moveVty dir (m'^.browsing.to total)
@@ -160,13 +167,59 @@ move dir m = m' & vty %~ moveVty dir (m'^.browsing.to total)
     things (TheItems _ is)    = fmap Right is
     things (TheText _ is _ _) = fmap Right is
 
+-- XXX: Does this work?!
+lthings :: Lens' Browsing (Zip (Either AnnFeed AnnItem))
+lthings k (TheFeeds fs) = TheFeeds <$> fmap (either id undefined)
+                                   <$> k (fmap Left fs)
+lthings k (TheItems fs is) =
+  (\is' -> TheItems fs is') <$> fmap (either undefined id)
+                            <$> k (fmap Right is)
+lthings k (TheText fs is i s) =
+  (\is' -> TheText fs is' i s) <$> fmap (either undefined id)
+                               <$> k (fmap Right is)
+
 ------------------------------------------------------------------------
 
 getItemUrl :: Model -> Maybe String
+getItemUrl m =
+  m ^? browsing._TheItems._2.link <|>
+  m ^? browsing._TheText._2.link
+  where
+  link = curr.item.itemLink.unpacked
+{-
 getItemUrl m = case m^.browsing of
   TheFeeds _       -> Nothing
   TheItems _ is    -> is^.curr.item.itemLink.to (Just . T.unpack)
   TheText  _ _ i _ -> i^.item.itemLink. to (Just . T.unpack)
+-}
+
+search :: Text -> Model -> Model
+search t m = case m^.browsing of
+  TheFeeds fs    -> case searchZip (matchFeed t) fs 0 of
+    Nothing       -> m
+    Just (fs', d) -> let total = length (closeZip fs) - 1
+                     in m & browsing .~ TheFeeds fs'
+                          & vty %~ \v -> iterate (moveVty Down total) v !! d
+  TheItems fs is -> case searchZip (matchItem t) is 0 of
+    Nothing       -> m
+    Just (is', d) -> let total = length (closeZip is) - 1
+                     in m & browsing .~ TheItems fs is'
+                          & vty %~ \v -> iterate (moveVty Down total) v !! d
+  TheText {..}   -> m
+  where
+  matchFeed :: Text -> AnnFeed -> Bool
+  matchFeed t' f = t' `matchText` (f^.feed.feedTitle)
+
+  matchItem :: Text -> AnnItem -> Bool
+  matchItem t' i = t' `matchText` (i^.item.itemTitle)
+
+  matchText :: Text -> Text -> Bool
+  matchText t' t'' = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
+
+searchZip :: (a -> Bool) -> Zip a -> Int -> Maybe (Zip a, Int)
+searchZip f z d | z^.next.to null = Nothing
+                | z^.curr.to f    = Just (z, d)
+                | otherwise       = searchZip f (moveZip Down z) (d + 1)
 
 ------------------------------------------------------------------------
 

@@ -51,6 +51,7 @@ import Data.Typeable
 import Data.Monoid
 import qualified Data.ByteString as BS
 import Data.Serialize
+import qualified Data.Text as T
 
 import Control.Applicative
 import Control.Lens hiding (view)
@@ -74,13 +75,13 @@ import Feeds
 
 ------------------------------------------------------------------------
 
-data Command = Move Dir | Redraw | Output String | UpdateFeed | UpdateFeeds
-  | OpenUrl | MarkAllAsRead | ToggleReadStatus
+data Command = Move Dir | Resize | Output String | UpdateFeed | UpdateFeeds
+  | OpenUrl | MarkAllAsRead | ToggleReadStatus | Search
   deriving (Eq, Show)
 
 ------------------------------------------------------------------------
 
-whenE :: forall a. Behavior Bool -> Event a -> Event a
+whenE :: Behavior Bool -> Event a -> Event a
 whenE = flip gate
 
 unlessE :: Behavior Bool -> Event a -> Event a
@@ -110,21 +111,18 @@ instance Exception SaveModel where
 main :: IO ()
 main = do
 
-  cfg <- readConfig
-
-  vty  <- Vty.mkVty =<< Vty.standardIOConfig
-  size <- Vty.displayBounds $ Vty.outputIface vty
-  (eEvent, pushEvent) <- sync newEvent
-
+  cfg   <- readConfig
+  vty   <- Vty.mkVty =<< Vty.standardIOConfig
+  size  <- Vty.displayBounds $ Vty.outputIface vty
   model <- setHeight (regionHeight size) <$> readSavedModel cfg
 
-  modelPath <- getModelPath
-
+  (eEvent, pushEvent) <- sync newEvent
   sync $ setupReactive cfg vty model eEvent
 
   forever (Vty.nextEvent vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel model') -> do
                   Vty.shutdown vty
+                  modelPath <- getModelPath
                   BS.writeFile modelPath $ encode model'
                   exitSuccess)
               , Handler (\e               -> do
@@ -147,41 +145,45 @@ setupReactive config vty iniModel eEvent = do
              ]
         :: Reactive (Behavior Bool)
 
-  let eCommand :: Event Command
-      eCommand = mconcat
-        [ bindKey 'K' $ Move Top
-        , bindKey 'k' $ Move Up
-        , bindKey 'j' $ Move Down
-        , bindKey 'J' $ Move Bot
-        , bindKey 'l' $ Move In
-        , bindKey 'q' $ Move Out
-        , bindKey 'R' $ UpdateFeed
-        , bindKey 'r' $ UpdateFeeds
-        , bindKey 'o' $ OpenUrl
-        , bindKey 'm' $ MarkAllAsRead
-        , bindKey 'M' $ ToggleReadStatus
-        , Redraw <$ filterE (== modKey [Vty.MCtrl] 'l') (whenE bMode eEvent)
-
-        -- XXX: redraw shouldn't be here. it needs to update the model with the new maxRows.
-
-        , Redraw <$ filterE isResize eEvent
-        ]
-        where
-        bindKey :: Char -> Command -> Event Command
-        bindKey char cmd = cmd <$ filterE (== key char) (whenE bMode eEvent)
-
-        isResize (Vty.EvResize _ _) = True
-        isResize _                  = False
-
   (eFeedDownloaded, pushFeedDownloaded) <- newEvent
 
-  let eFeeds :: Event [AnnFeed]
-      eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
-        where
-        io :: IO [AnnFeed]
-        io = downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
-
   rec
+    let eCommand :: Event Command
+        eCommand = mconcat
+          [ bindKey 'K' $ Move Top
+          , bindKey 'k' $ Move Up
+          , bindKey 'j' $ Move Down
+          , bindKey 'J' $ Move Bot
+          , bindKey 'l' $ Move In
+          , bindKey 'q' $ Move Out
+          , bindKey 'R'   UpdateFeed
+          , bindKey 'r'   UpdateFeeds
+          , bindKey 'o'   OpenUrl
+          , bindKey 'm'   MarkAllAsRead
+          , bindKey 'M'   ToggleReadStatus
+          , bindKey '\t'  Search
+          , Resize <$ filterE isResize eEvent `mappend`
+                      filterE (== modKey [Vty.MCtrl] 'l') (whenE bMode eEvent)
+          ]
+          where
+          bindKey :: Char -> Command -> Event Command
+          bindKey char cmd = cmd <$ filterE (== key char)
+            (whenE ((0 ==) . _downloading <$> bModel) $ whenE bMode eEvent)
+
+          isResize (Vty.EvResize _ _) = True
+          isResize _                  = False
+
+    let eFeeds :: Event [AnnFeed]
+        eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
+          where
+          io :: IO [AnnFeed]
+          io = downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
+
+    -- XXX: Moving after update feed causes the wrong feed to be
+    -- updated. This is currently "fixed" by not allowing any commands
+    -- while downloading.
+
+    -- XXX: Using syncIO instead of asyncIO causes thread blocked on MVar...
     let eFeed :: Event AnnFeed
         eFeed = executeAsyncIO $ snapshot (\_ model -> io (getFeedUrl model))
                                           (filterE (== UpdateFeed) eCommand)
@@ -206,7 +208,9 @@ setupReactive config vty iniModel eEvent = do
                    , cmdSem (Move Out)  $ \model -> if browsingFeeds model
                                                     then throw $ SaveModel model
                                                     else move Out model
-                   , cmdSem Redraw id
+
+                   -- XXX: Resize needs access to IO to get the new size...
+                   , cmdSem Resize id
 
                    , cmdSem ToggleReadStatus $
                        browsing._TheItems._2.curr.isRead %~ not
@@ -214,13 +218,15 @@ setupReactive config vty iniModel eEvent = do
                    , cmdSem MarkAllAsRead $ \model ->
                        if browsingFeeds model
                        then model & browsing.feeds.traverse.feed.feedItems.traverse.isRead .~ True
-                       else model & browsing._TheItems._2   .traverse.isRead .~ True
+                       else model & browsing._TheItems._2.traverse.isRead .~ True
 
                    , cmdSem UpdateFeed $ \model ->
                        model & downloading .~ 1
 
                    , cmdSem UpdateFeeds $ \model ->
                        model & downloading .~ config^.urls.to length
+
+                   , cmdSem Search $ search $ T.pack "agda" -- XXX
 
                    , (\f model ->
                        model & browsing.feeds.curr %~ flip Feeds.merge f) <$> eFeed
