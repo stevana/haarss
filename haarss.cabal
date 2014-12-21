@@ -29,7 +29,8 @@ executable haarss
   if impl(ghc < 7.6)
     build-depends:
       directory >= 1.0 && < 1.2,
-      old-time >= 1.0 && < 1.2
+      old-time >= 1.0 && < 1.2,
+      ghc-prim == 0.3.1.0
   else
     build-depends:
       directory == 1.2.*,
