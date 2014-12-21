@@ -30,59 +30,55 @@ import Feeds (AnnFeed(..), defaultAnn, history, convert)
 
 ------------------------------------------------------------------------
 
-download :: forall a. [String] -> IO () ->
-            (BS.ByteString -> Either String a) -> IO [(Maybe a, History)]
-download urls callback parser = do
+download1 :: String -> IO () -> (BS.ByteString -> Either String a) ->
+             IO (Maybe a, History)
+download1 url callback parser = do
+  time <- getCurrentTime
+  let opts = defaults & redirects .~ 3
+                      & manager   .~ Left tlsManagerSettings
+  r <- do
+    mr <- timeout (30 * 1000000) $ getWith opts url
+    case mr of
+      Nothing -> return (Nothing, Failure time TimeoutFailure)
+      Just r  -> case r^.responseBody.to parser of
+        Left err -> return (Nothing, Failure time $ ParseFailure err)
+        Right x  -> return (Just x, Success time)
+    `catches`
+      [ Handler (\(e :: HttpException) ->
+          return (Nothing, Failure time $
+                           DownloadFailure $ simplifyHttpException e))
+      , Handler (\(_ :: SomeException) ->
+          return (Nothing, Failure time UnknownFailure))
+      ]
+  callback
+  return r
+
+download :: [String] -> IO () -> (BS.ByteString -> Either String a) ->
+            IO [(Maybe a, History)]
+download [url] callback parser = (:[]) <$> download1 url callback parser
+download urls  callback parser = do
 
   alive  <- newTVarIO $ length urls
-  result <- newArray_ (1, length urls) :: IO (IOArray Int (Maybe a, History))
-
+  result <- newArray_ (1, length urls)
+         :: IO (IOArray Int (Maybe a, History))
   forM_ (zip [1..] urls) $ \(idx, url) -> do
-    forkIO (fetch idx url alive result)
+    forkIO $ do
+      writeArray result idx =<< download1 url callback parser
+      atomically $ modifyTVar alive pred
 
   waitForThreads alive
   getElems result
   where
-
   waitForThreads :: TVar Int -> IO ()
   waitForThreads alive = atomically $ do
     n <- readTVar alive
     check (n == 0)
 
-  fetch :: Int -> String -> TVar Int -> IOArray Int (Maybe a, History) -> IO ()
-  fetch idx url alive result = do
-
-    time <- getCurrentTime
-
-    let write = writeArray result idx
-
-    let opts = defaults & redirects .~ 3
-                        & manager   .~ Left tlsManagerSettings
-
-    do { mr <- timeout (30 * 1000000) $ getWith opts url
-
-       ; case mr of
-           Nothing -> write (Nothing, Failure time $ TimeoutFailure)
-           Just r -> case r^.responseBody.to parser of
-             Left err -> write (Nothing, Failure time $ ParseFailure err)
-             Right x  -> write (Just x, Success time)
-
-       } `catches`
-           [ Handler (\(e :: HttpException) ->
-               write (Nothing, Failure time $
-                       DownloadFailure (simplifyHttpException e)))
-           , Handler (\(_ :: SomeException) ->
-               write (Nothing, Failure time UnknownFailure))
-           ]
-
-    callback
-    atomically $ modifyTVar alive pred
-
-
 -- XXX: Error handling, avoid unpacking bytestring
 feedParser :: BS.ByteString -> Either String Feed
-feedParser = maybe (Left "failed to parse feed") Right .
-           parseFeedString . map (chr . fromEnum) . BS.unpack
+feedParser
+  = maybe (Left "failed to parse feed") Right
+  . parseFeedString . map (chr . fromEnum) . BS.unpack
 
 downloadFeeds :: [String] -> IO () -> IO [AnnFeed]
 downloadFeeds urls callback =
@@ -94,9 +90,9 @@ downloadFeeds urls callback =
   downloadToFeed (url, (Nothing, h)) = defaultAnn (convert f) &
                                          history .~ [h]
     where
-    f = withFeedTitle url $
-        withFeedHome url $
-        newFeed AtomKind
+    f = withFeedTitle url
+      $ withFeedHome  url
+      $ newFeed AtomKind
 
 ------------------------------------------------------------------------
 
