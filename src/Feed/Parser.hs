@@ -32,8 +32,7 @@ fromRSS1 doc = newEmptyFeed RSS1Kind
   & feedHTML        .~ ""
   & feedDescription .~ doc^?root.ell "channel"./ell "description".text
   & feedLastUpdate  .~ doc^?root.ell "channel"./ell "date".text
-  & feedItems       .~ doc^..root./ell "item"
-                         & over (traverse.traverse) toItem
+  & feedItems       .~ doc^..root./ell "item" & mapped.mapped %~ toItem
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
@@ -51,7 +50,7 @@ fromRSS2 doc = newEmptyFeed RSS2Kind
   & feedDescription .~ doc^?root.el "channel"./el "description".text
   & feedLastUpdate  .~ doc^?root.el "channel"./el "date".text
   & feedItems       .~ doc^..root./el "channel"./el "item"
-                         & over (traverse.traverse) toItem
+                         & mapped.mapped %~ toItem
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
@@ -68,8 +67,7 @@ fromAtom doc = newEmptyFeed AtomKind
   & feedHTML        .~ ""
   & feedDescription .~ Nothing
   & feedLastUpdate  .~ doc^?root.ell "updated".text
-  & feedItems       .~ doc^..root./ell "entry"
-                         & over (traverse.traverse) toItem
+  & feedItems       .~ doc^..root./ell "entry" & mapped.mapped %~ toItem
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
