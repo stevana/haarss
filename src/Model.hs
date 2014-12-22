@@ -1,12 +1,11 @@
 {-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveFoldable,
-             DeriveTraversable, DeriveGeneric, RecordWildCards #-}
+             DeriveTraversable, RecordWildCards #-}
 
 module Model where
 
 import Control.Applicative
 import Control.Lens
 import Data.Foldable (Foldable)
-import GHC.Generics (Generic)
 
 import Constants
 import Config
@@ -27,7 +26,7 @@ data Zip a = Zip
   , _curr :: a
   , _next :: [a]
   }
-  deriving (Functor, Foldable, Traversable, Generic)
+  deriving (Functor, Foldable, Traversable)
 
 makeLenses ''Zip
 
@@ -62,7 +61,6 @@ data Browsing
   = TheFeeds (Zip AnnFeed)
   | TheItems (Zip AnnFeed) (Zip AnnItem)
   | TheText  (Zip AnnFeed) (Zip AnnItem) AnnItem Scroll
-  deriving Generic
 
 makePrisms ''Browsing
 
@@ -97,7 +95,6 @@ data VtyStuff
   = ForFeeds Position Height
   | ForItems Position Position Height
   | ForText  Position Position Height
-  deriving Generic
 
 initialVtyStuff :: VtyStuff
 initialVtyStuff = ForFeeds (Position 0 0) 0
@@ -117,13 +114,11 @@ data Model = Model
   , _downloading :: Int
   , _vty         :: VtyStuff
   }
-  deriving Generic
 
 data Position = Position
   { _window :: Int
   , _cursor :: Int
   }
-  deriving Generic
 
 makeLenses ''Position
 makeLenses ''Model
@@ -296,7 +291,5 @@ readSavedModel cfg = do
 ------------------------------------------------------------------------
 
 instance Serialize Model where
-instance Serialize Browsing where
-instance Serialize VtyStuff where
-instance Serialize Position where
-instance Serialize a => Serialize (Zip a) where
+  put m = put $ m^.browsing._TheFeeds.to closeZip
+  get   = makeModel <$> get
