@@ -24,6 +24,15 @@ data FailureReason
   | UnknownFailure
   deriving Generic
 
+instance Show FailureReason where
+  show (DownloadFailure (StatusCodeException' s))
+    = "Status code: " ++ show (statusCode s) ++ "."
+  show (DownloadFailure _)
+    = "Unknown download failure."
+  show (ParseFailure _) = "Parse failure."
+  show TimeoutFailure   = "Timeout failure."
+  show UnknownFailure   = "Unknown failure."
+
 data HttpExceptionSimple
   = StatusCodeException' Status
   | OtherException

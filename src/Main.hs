@@ -70,8 +70,9 @@ import Constants
 import Config
 import Model
 import View
+import Feed.Feed
+import Feed.Annotated
 import Fetching
-import Feeds
 
 ------------------------------------------------------------------------
 
@@ -229,7 +230,7 @@ setupReactive config vty iniModel eEvent = do
                    , cmdSem Search $ search $ T.pack "agda" -- XXX
 
                    , (\f model ->
-                       model & browsing.feeds.curr %~ flip Feeds.merge f) <$> eFeed
+                       model & browsing.feeds.curr %~ flip Feed.Annotated.merge f) <$> eFeed
 
                    -- XXX: this loses the current position (maybe not bad?)
                    , (\fs model -> model & browsing.feeds .~ makeZip
@@ -250,7 +251,7 @@ setupReactive config vty iniModel eEvent = do
         helper model = do
           url <- getItemUrl model
           return $ do
-            _ <- createProcess (proc (config^.browser) [url])
+            _ <- createProcess (proc (config^.browser) [T.unpack url])
                    { std_err = CreatePipe }
             return ()
 

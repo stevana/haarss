@@ -5,13 +5,13 @@ module Model where
 
 import Control.Applicative
 import Control.Lens
-import Data.Text.Lens
 import Data.Foldable (Foldable)
 import GHC.Generics (Generic)
 
 import Constants
 import Config
-import Feeds
+import Feed.Feed
+import Feed.Annotated
 
 -- XXX:
 import Data.Serialize
@@ -129,7 +129,7 @@ makeLenses ''Position
 makeLenses ''Model
 
 browsingFeeds :: Model -> Bool
-browsingFeeds m = maybe False (const True) $ m ^? browsing._TheFeeds
+browsingFeeds m = m^.browsing & has _TheFeeds
 
 moveVty :: Dir -> Int -> (VtyStuff -> VtyStuff)
 moveVty Top _    v = v & position.cursor .~ 0
@@ -180,12 +180,12 @@ lthings k (TheText fs is i s) =
 
 ------------------------------------------------------------------------
 
-getItemUrl :: Model -> Maybe String
+getItemUrl :: Model -> Maybe Text
 getItemUrl m =
-  m ^? browsing._TheItems._2.link <|>
-  m ^? browsing._TheText._2.link
+  m^.browsing._TheItems._2.link <|>
+  m^.browsing._TheText._2.link
   where
-  link = curr.item.itemLink.unpacked
+  link = curr.item.itemLink
 {-
 getItemUrl m = case m^.browsing of
   TheFeeds _       -> Nothing
@@ -213,8 +213,9 @@ search t m = case m^.browsing of
   matchItem :: Text -> AnnItem -> Bool
   matchItem t' i = t' `matchText` (i^.item.itemTitle)
 
-  matchText :: Text -> Text -> Bool
-  matchText t' t'' = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
+  matchText :: Text -> Maybe Text -> Bool
+  matchText t' Nothing    = False
+  matchText t' (Just t'') = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
 
 searchZip :: (a -> Bool) -> Zip a -> Int -> Maybe (Zip a, Int)
 searchZip f z d | z^.next.to null = Nothing
@@ -268,7 +269,7 @@ initialModel cfg = makeModel fs
   where
   fs :: [AnnFeed]
   fs = cfg^.urls & mapped %~ \url -> defaultAnn $
-         newEmptyFeed AtomKind & feedTitle .~ T.pack url
+         newEmptyFeed AtomKind & feedTitle ?~ T.pack url
                                & feedHome  .~ T.pack url
 
 -- XXX: Better name? Explain magic 6.

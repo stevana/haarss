@@ -11,8 +11,8 @@ import Control.Lens
 
 import Data.Array.IO
 import qualified Data.ByteString.Lazy as BS
-import Data.Char (chr)
 import Data.Time
+import qualified Data.Text as T
 
 import Network.Wreq
 import Network.HTTP.Client (HttpException)
@@ -20,13 +20,13 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 import System.Timeout
 
-import Text.Feed.Types (Feed)
-import Text.Feed.Constructor
-  (newFeed, FeedKind(AtomKind), withFeedTitle, withFeedHome)
-import Text.Feed.Import (parseFeedString)
-
 import Fetching.History
-import Feeds (AnnFeed(..), defaultAnn, history, convert)
+import Feed.Feed
+import Feed.Annotated
+import Feed.Parser
+
+import Constants
+import qualified Config
 
 ------------------------------------------------------------------------
 
@@ -74,39 +74,33 @@ download urls  callback parser = do
     n <- readTVar alive
     check (n == 0)
 
--- XXX: Error handling, avoid unpacking bytestring
 feedParser :: BS.ByteString -> Either String Feed
-feedParser
-  = maybe (Left "failed to parse feed") Right
-  . parseFeedString . map (chr . fromEnum) . BS.unpack
+feedParser = bimap show id . parseFeed
 
 downloadFeeds :: [String] -> IO () -> IO [AnnFeed]
 downloadFeeds urls callback =
   map downloadToFeed . zip urls <$> download urls callback feedParser
   where
   downloadToFeed :: (String, (Maybe Feed, History)) -> AnnFeed
-  downloadToFeed (_,   (Just f,  h)) = defaultAnn (convert f) &
+  downloadToFeed (_,   (Just f,  h)) = defaultAnn f &
                                          history .~ [h]
-  downloadToFeed (url, (Nothing, h)) = defaultAnn (convert f) &
+  downloadToFeed (url, (Nothing, h)) = defaultAnn f &
                                          history .~ [h]
     where
-    f = withFeedTitle url
-      $ withFeedHome  url
-      $ newFeed AtomKind
+    f = newEmptyFeed AtomKind
+      & feedTitle ?~ T.pack url
 
 ------------------------------------------------------------------------
 
-{-
 downloadDebug :: [String] -> IO ()
 downloadDebug urls = do
   dls <- download urls (return ()) feedParser
-  forM_ (zip urls dls) $ \(url, dl) -> case dl of
-    Success _ _ -> putStrLn url
-    Failure _ e -> putStrLn $ show e ++ " " ++ url
+  forM_ (zip urls dls) $ \(url, (_ , h)) -> case h of
+    Success _   -> putStrLn url
+    Failure _ e -> putStrLn $ show e ++ ": " ++ url
 
 runTest :: IO ()
 runTest = do
   cfgPath <- getConfigPath
   cfg <- read <$> readFile cfgPath
-  downloadDebug (cfg^.urls)
--}
+  downloadDebug (cfg^.Config.urls)

@@ -3,13 +3,14 @@
 module View where
 
 import Control.Lens hiding (pre)
-import Graphics.Vty
-
 import Data.Text (Text)
 import qualified Data.Text as T
-import Model
-import Feeds
+import Graphics.Vty
+
+import Feed.Feed
+import Feed.Annotated
 import Fetching.History
+import Model
 
 ------------------------------------------------------------------------
 
@@ -85,13 +86,16 @@ failedImage f | f^.history.to failed = char defAttr '!'
 feedImage :: AnnFeed -> Image
 feedImage f = horizCat
   [ failedImage f
-  , f^.feed.feedTitle.to (text' defAttr)
+  , text' defAttr $ f^.feed.feedTitle.be "no title"
   , char defAttr ' '
-  , text' defAttr (unread f)
+  , text' defAttr $ unread f
   ]
 
 itemImage :: AnnItem -> Image
-itemImage i = char defAttr ' ' <|> i^.item.itemTitle.to (text' attr)
+itemImage i = horizCat
+  [ char defAttr ' '
+  , text' attr (i^.item.itemTitle.be "no title")
+  ]
   where
   attr :: Attr
   attr | i^.isRead = defAttr
@@ -99,15 +103,15 @@ itemImage i = char defAttr ' ' <|> i^.item.itemTitle.to (text' attr)
 
 focusedFeedImage :: AnnFeed -> Image
 focusedFeedImage f = horizCat
-  [ f^.feed.feedTitle.to focusedText
+  [ focusedText $ f^.feed.feedTitle.be "no title"
   , char standoutAttr ' '
-  , text' standoutAttr (unread f)
+  , text' standoutAttr $ unread f
   ]
 
 focusedItemImage :: AnnItem -> Image
 focusedItemImage i = horizCat
   [ char standoutAttr ' '
-  , text' attr (i^.item.itemTitle)
+  , text' attr $ i^.item.itemTitle.be "no title"
   , charFill standoutAttr ' ' (100 :: Int) 1
   ]
   where
@@ -120,8 +124,6 @@ focusedText t = char standoutAttr ' ' <|> text' standoutAttr t
   -- Need the width here to do it properly...
   -- <|> charFill standoutAttr ' ' 100 1
 
-
-
 drawModel :: Model -> Image
 drawModel m =
   let p = m^.vty.position.window
@@ -131,8 +133,8 @@ drawModel m =
   case m^.browsing of
     TheFeeds fs      -> drawZip fs feedImage focusedFeedImage p h
     TheItems _ is    -> drawZip is itemImage focusedItemImage p h
-    TheText  _ _ i _ -> drawList id (i^.item.itemDescription.to
-                          (fmt' (min 50 w)))
+    TheText  _ _ i _ -> drawList id (i^.item.itemDescription.be
+                          "(no desc)".to (fmt' (min 50 w)))
 ------------------------------------------------------------------------
 
 
