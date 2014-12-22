@@ -6,6 +6,8 @@ module Model where
 import Control.Applicative
 import Control.Lens
 import Data.Foldable (Foldable)
+import Data.Serialize
+import Test.QuickCheck
 
 import Constants
 import Config
@@ -13,7 +15,6 @@ import Feed.Feed
 import Feed.Annotated
 
 -- XXX:
-import Data.Serialize
 import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -39,6 +40,9 @@ makeZip (x : xs) = Zip [] x xs
 
 closeZip :: Zip a -> [a]
 closeZip (Zip xs z ys) = reverse xs ++ z : ys
+
+prop_makeClose :: Eq a => NonEmptyList a -> Bool
+prop_makeClose (NonEmpty xs) = closeZip (makeZip xs) == xs
 
 moveZip :: Dir -> Zip a -> Zip a
 moveZip Up   z@(Zip [] _ _)      = z
@@ -209,7 +213,7 @@ search t m = case m^.browsing of
   matchItem t' i = t' `matchText` (i^.item.itemTitle)
 
   matchText :: Text -> Maybe Text -> Bool
-  matchText t' Nothing    = False
+  matchText _  Nothing    = False
   matchText t' (Just t'') = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
 
 searchZip :: (a -> Bool) -> Zip a -> Int -> Maybe (Zip a, Int)
