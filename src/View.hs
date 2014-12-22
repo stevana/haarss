@@ -14,6 +14,131 @@ import Model
 
 ------------------------------------------------------------------------
 
+standoutAttr, boldAttr, standoutBoldAttr :: Attr
+standoutAttr     = defAttr      `withStyle` standout
+boldAttr         = defAttr      `withStyle` bold
+standoutBoldAttr = standoutAttr `withStyle` bold
+
+bar :: Text -> Image
+bar t = text' standoutAttr t <|> charFill standoutAttr ' ' (100 :: Int) 1
+
+separator :: Image
+separator = char defAttr ' '
+
+attributed :: Attr -> Text -> Image
+attributed attr t = char attr ' ' <|> text' attr t
+
+normal :: Text -> Image
+normal = attributed defAttr
+
+focused :: Text -> Image
+focused = attributed standoutAttr
+
+boldly :: Text -> Image
+boldly = attributed boldAttr
+
+drawZip :: Zip a -> (a -> Image) -> (a -> Image) -> Int -> Int -> Image
+drawZip z e f w h = vertCat
+  [ drawList e aboveCursor
+  , z^.curr.to f
+  , drawList e (z^.next.to (take (h - length aboveCursor)))
+  ]
+  where
+  aboveCursor = z^.prev.to (drop w)
+
+drawList :: (a -> Image) -> [a] -> Image
+drawList f = vertCat . map f
+
+------------------------------------------------------------------------
+
+fmt :: Int -> Text -> [Text]
+fmt maxLen = map T.unwords . go 0 [] . T.words
+  where
+  go :: Int -> [Text] -> [Text] -> [[Text]]
+  go _      acc []       = [reverse acc]
+  go rowLen acc (w : ws)
+    | rowLen + wl + 1 > maxLen = reverse acc : go wl [w] ws
+    | otherwise                = go (rowLen + wl + 1) (w : acc) ws
+    where
+    wl = T.length w
+
+unread :: AnnFeed -> Text
+unread f = f^.feed.feedItems.to
+  (T.pack . (\s -> if s == "0" then "" else "(" ++ s ++ " new)") .
+    show . length . filter ((== False) . _isRead))
+
+failedImage :: Attr -> AnnFeed -> Image
+failedImage attr f
+  | f^.history.to failed = char attr '!'
+  | otherwise            = char attr ' '
+
+feedImage :: AnnFeed -> Image
+feedImage f = horizCat
+  [ failedImage defAttr f
+  , text' defAttr $ f^.feed.feedTitle.be "no title"
+  , normal $ unread f
+  ]
+
+focusedFeedImage :: AnnFeed -> Image
+focusedFeedImage f = horizCat
+  [ failedImage standoutAttr f
+  , text' standoutAttr $ f^.feed.feedTitle.be "no title"
+  , focused $ unread f
+  ]
+
+itemImage :: AnnItem -> Image
+itemImage i = attributed attr (i^.item.itemTitle.be "no title")
+  where
+  attr :: Attr
+  attr | i^.isRead = defAttr
+       | otherwise = boldAttr
+
+focusedItemImage :: AnnItem -> Image
+focusedItemImage i = horizCat
+  [ attributed attr $ i^.item.itemTitle.be "no title"
+  , charFill standoutAttr ' ' (100 :: Int) 1
+  ]
+  where
+  attr :: Attr
+  attr | i^.isRead = standoutAttr
+       | otherwise = standoutBoldAttr
+
+drawModel :: Model -> Image
+drawModel m =
+  let p = m^.vty.position.window
+      w = 50 -- XXX: m^.vty.width - 3...
+      h = m^.vty.height
+  in
+  case m^.browsing of
+
+    TheFeeds fs      -> drawZip fs feedImage focusedFeedImage p h
+
+    TheItems fs is   -> vertCat
+      [ boldly (desc fs^.be "")
+      , separator
+      , drawZip is itemImage focusedItemImage p h
+      ]
+
+    TheText  fs is i s -> vertCat
+      [ boldly (desc fs^.be "")
+      , separator
+      -- XXX: use width instead of 80 below.
+      , normal (T.center (80 - 1) ' ' (i^.item.itemTitle.be ""))
+      , separator
+      -- XXX: use height when scrolling?
+      -- XXX: replace 50 below with height.
+      , drawList (\t -> char defAttr ' ' <|> normal t) $
+          i^.item.itemDescription.be
+            "(no desc)".to (take 50 . drop s . fmt (min 50 w))
+      ]
+
+  where
+  desc :: Zip AnnFeed -> Maybe Text
+  desc fs = asumOf both (fs^.curr.feed.feedDescription,
+                        fs^.curr.feed.feedTitle)
+
+------------------------------------------------------------------------
+
 defaultStatus :: String
 defaultStatus = " Press 'h' for help."
 
@@ -26,7 +151,7 @@ render (m, buf) =
   then
     separator
     <->
-    drawList T.pack (lines (show m))
+    drawList (string defAttr) (lines (show m))
   else
     bar " haarss 0.1"
     <->
@@ -39,227 +164,18 @@ render (m, buf) =
     bar (T.pack (status (m^.downloading) buf))
     where
     body       = drawModel m
-    paddedBody = vertCat $ body : replicate emptyRows (char defAttr ' ')
+    paddedBody = vertCat $ body : replicate emptyRows separator
       where
       -- XXX: why is +1 needed here?
+
       emptyRows :: Int
       emptyRows = max 0 $ m^.vty.height + 1 - imageHeight body
     status :: Int -> String -> String
     status 0  ""  = defaultStatus
     --- status 0 b    = " Input:" ++ b
-    status n ""   = " Downloading (" ++ show n ++ " feed" ++ (if n == 1
-                                                             then ""
-                                                             else "s") ++ " to go)"
+    status n ""   = " Downloading (" ++
+      show n ++ " feed" ++ (if n == 1 then "" else "s") ++ " to go)"
     status _   _  = "status: bad state"
 
-bar :: Text -> Image
-bar t = text' standoutAttr t <|> charFill standoutAttr ' ' (100 :: Int) 1
-
-separator :: Image
-separator = char defAttr ' '
-
 view :: Vty -> (Model, String) -> IO ()
-view v ms = do
-  update v $ picForImage $ render ms
-
-------------------------------------------------------------------------
-
-drawZip :: Zip a -> (a -> Image) -> (a -> Image) -> Int -> Int -> Image
-drawZip z e f w h =
-  drawList'' e aboveCursor
-  <->
-  z^.curr.to f
-  <->
-  drawList'' e (z^.next.to (take (h - length aboveCursor)))
-  where
-  aboveCursor = z^.prev.to (drop w)
-
-unread :: AnnFeed -> Text
-unread f = f^.feed.feedItems.to
-  (T.pack . (\s -> if s == "0" then "" else "(" ++ s ++ " new)") .
-    show . length . filter ((== False) . _isRead))
-
-failedImage :: AnnFeed -> Image
-failedImage f | f^.history.to failed = char defAttr '!'
-              | otherwise            = char defAttr ' '
-
-feedImage :: AnnFeed -> Image
-feedImage f = horizCat
-  [ failedImage f
-  , text' defAttr $ f^.feed.feedTitle.be "no title"
-  , char defAttr ' '
-  , text' defAttr $ unread f
-  ]
-
-itemImage :: AnnItem -> Image
-itemImage i = horizCat
-  [ char defAttr ' '
-  , text' attr (i^.item.itemTitle.be "no title")
-  ]
-  where
-  attr :: Attr
-  attr | i^.isRead = defAttr
-       | otherwise = boldAttr
-
-focusedFeedImage :: AnnFeed -> Image
-focusedFeedImage f = horizCat
-  [ focusedText $ f^.feed.feedTitle.be "no title"
-  , char standoutAttr ' '
-  , text' standoutAttr $ unread f
-  ]
-
-focusedItemImage :: AnnItem -> Image
-focusedItemImage i = horizCat
-  [ char standoutAttr ' '
-  , text' attr $ i^.item.itemTitle.be "no title"
-  , charFill standoutAttr ' ' (100 :: Int) 1
-  ]
-  where
-  attr :: Attr
-  attr | i^.isRead = standoutAttr
-       | otherwise = standoutBoldAttr
-
-focusedText :: Text -> Image
-focusedText t = char standoutAttr ' ' <|> text' standoutAttr t
-  -- Need the width here to do it properly...
-  -- <|> charFill standoutAttr ' ' 100 1
-
-drawModel :: Model -> Image
-drawModel m =
-  let p = m^.vty.position.window
-      w = 50 -- XXX: m^.vty.width - 3...
-      h = m^.vty.height
-  in
-  case m^.browsing of
-    TheFeeds fs      -> drawZip fs feedImage focusedFeedImage p h
-    TheItems _ is    -> drawZip is itemImage focusedItemImage p h
-    TheText  _ _ i _ -> drawList id (i^.item.itemDescription.be
-                          "(no desc)".to (fmt' (min 50 w)))
-------------------------------------------------------------------------
-
-
-standoutAttr, boldAttr, standoutBoldAttr, underlineAttr :: Attr
-standoutAttr = defAttr `withStyle` standout
-boldAttr     = defAttr `withStyle` bold
-standoutBoldAttr = standoutAttr `withStyle` bold
-underlineAttr = defAttr `withStyle` underline
-
-{-
-title :: AnnItem -> T.Text
--- title = maybe "(No title)" T.unpack . _itemTitle
-title = _itemTitle . _item
-
-desc :: Feed' a -> T.Text
-desc feed | feed^.feedDescription /= T.empty = feed^.feedDescription
-          | otherwise                        = feed^.feedTitle
-
--- (' ' : maybe (getFeedTitle (fs^.curr)) (\desc -> if null desc then error "a" else error "b") (getFeedDescription (fs^.curr)))
-
-
-
--- XXX: since feed description (+ separator) was added to ShowItem, we
--- probably need to display fewer feeds, i.e. drop 2 nex?
-drawModel :: Model -> DisplayRegion -> Image
-drawModel (Model fs i FeedsView _ _) sz = case visible fs (i^.above) (regionHeight sz) of
-  (pre, feed, nex) ->
-    drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) pre
-    <->
-    string standoutAttr (T.unpack $ ' ' `T.cons` feed^.feedTitle <> " " <> showUnread feed)
-    <->
-    drawList (\f -> T.unpack $ f^.feedTitle <> " " <> showUnread f) nex
-drawModel (Model fs i (ItemsView is False) _ _) sz = case visible is (i^.above) (regionHeight sz) of
-  (pre, feed, nex) ->
-    string boldAttr (T.unpack $ T.cons ' ' $ desc (fs^.curr))
-    <->
-    separator
-    <->
-    drawList' (map (\it -> if it^.isRead then defAttr else boldAttr) pre) (T.unpack . title) pre
-    <->
-    string (if feed^.isRead then standoutAttr else standout_boldAttr)
-           (T.unpack $ ' ' `T.cons` title feed)
-    <->
-    drawList' (map (\it -> if it^.isRead then defAttr else boldAttr) nex) (T.unpack . title) nex
-drawModel (Model fs _ (ItemsView is True) _ _) sz =
-  string boldAttr (T.unpack $ ' ' `T.cons` desc (fs^.curr))
-  <->
-  separator
-  <->
-  string defAttr (T.unpack $ T.center (fromEnum (regionWidth sz)) ' '
-                                       (is^.curr.item.itemTitle))
-  <->
-  separator
-    -- XXX: what to do when desc is longer than rows? space to scroll
-    -- down (1 screen), u (up half screen), see man page of less(1).
-  <->
-  drawList id lns
-  where
-  lns :: [String]
-  lns = fmt (min 50 (toInteger (regionWidth sz) - 3)) $
-     removeHtml $ T.unpack $ is^.curr.item.itemDescription
-
-visible :: Zip a -> Int -> Int -> ([a], a, [a])
-visible (Zip pr cu ne) ab rows
-  = (pr', cu, take (rows - length pr' - 5) ne)
-  where
-  pr' = drop ab pr
--}
-
-drawList'' :: (a -> Image) -> [a] -> Image
-drawList'' f = vertCat . map f
-
-drawList :: (a -> T.Text) -> [a] -> Image
-drawList s xs = drawList' (replicate (length xs) defAttr) s xs
-
-drawList' :: [Attr] -> (a -> T.Text) -> [a] -> Image
-drawList' attrs r xs = vertCat $
-  flip map (zip xs attrs) $ \(x, attr) ->
-    text' attr $ T.singleton ' ' `T.append` r x
-
-fmt :: Int -> String -> [String]
-fmt maxLen = map unwords . go 0 [] . words
-  where
-  go :: Int -> [String] -> [String] -> [[String]]
-  go _      acc []       = [reverse acc]
-  go rowLen acc (w : ws)
-    | rowLen + wl + 1 > maxLen = reverse acc : go wl [w] ws
-    | otherwise                = go (rowLen + wl + 1) (w : acc) ws
-    where
-    wl = length w
-
-fmt' :: Int -> T.Text -> [T.Text]
-fmt' maxLen = map T.unwords . go 0 [] . T.words
-  where
-  go :: Int -> [T.Text] -> [T.Text] -> [[T.Text]]
-  go _      acc []       = [reverse acc]
-  go rowLen acc (w : ws)
-    | rowLen + wl + 1 > maxLen = reverse acc : go wl [w] ws
-    | otherwise                = go (rowLen + wl + 1) (w : acc) ws
-    where
-    wl = T.length w
-
-{-
-------------------------------------------------------------------------
-
--- XXX: how do we save newlines? fmt's words/unwords mangles them...
-removeHtml :: String -> String
-removeHtml
-  = innerText
-  -- . replace (TagOpen "p" [])  (TagText " NEWLINE ")
-  -- . replace (TagOpen "br" []) (TagText " NEWLINE ")
-  . parseTags
-
-replace :: Eq a => a -> a -> [a] -> [a]
-replace _   _   []       = []
-replace old new (x : xs) | x == old  = new : replace old new xs
-                         | otherwise = x   : replace old new xs
-
-
-------------------------------------------------------------------------
-
-prop_fmt :: Integer -> String -> Bool
-prop_fmt i s = filter (not . isSpace) (concat (fmt i s)) ==
-               filter (not . isSpace) (concat (words s))
-
-prop_replace :: Int -> [Int] -> Bool
-prop_replace x xs = replace x x xs == xs
--}
+view v = update v . picForImage . render
