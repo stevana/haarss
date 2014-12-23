@@ -2,11 +2,12 @@
 
 module Feed.Parser (parseFeed) where
 
-import Control.Exception (SomeException)
-import Data.ByteString.Lazy (ByteString)
+import Control.Exception        (SomeException)
+import Data.ByteString.Lazy     (ByteString)
+import Data.Text                (strip)
 import Data.Text.Encoding.Error (lenientDecode)
-import Data.Text.Lazy.Encoding (decodeUtf8With)
-import Text.XML (parseText, def)
+import Data.Text.Lazy.Encoding  (decodeUtf8With)
+import Text.XML                 (parseText, def)
 import Text.XML.Lens
 
 import Feed.Feed
@@ -36,7 +37,7 @@ fromRSS1 doc = newEmptyFeed RSS1Kind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ e^?entire.ell "title".text
+    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ strip)
     & itemLink        .~ e^?entire.ell "link".text
     & itemDate        .~ Nothing
     & itemFeedLink    .~ Nothing
@@ -54,7 +55,7 @@ fromRSS2 doc = newEmptyFeed RSS2Kind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ e^?entire.el "title".text
+    & itemTitle       .~ (e^?entire.el "title".text & mapped %~ strip)
     & itemLink        .~ e^?entire.el "link".text
     & itemDate        .~ e^?entire.el "pubDate".text
     & itemFeedLink    .~ Nothing
@@ -71,7 +72,7 @@ fromAtom doc = newEmptyFeed AtomKind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ e^?entire.ell "title".text
+    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ strip)
     & itemLink        .~ e^?entire.ell "link".attr "href"
     & itemDate        .~ e^?entire.ell "published".text
     & itemFeedLink    .~ Nothing
@@ -80,6 +81,7 @@ fromAtom doc = newEmptyFeed AtomKind
 ------------------------------------------------------------------------
 -- XXX: Debugging
 
+{-
 ppFeed :: Feed -> String
 ppFeed f = unlines
   [ f^.feedTitle.to show
@@ -99,5 +101,6 @@ ppItem i = unlines
 ppList :: (a -> String) -> [a] -> String
 ppList pp xs = "[" ++ go xs
   where
-  go []       = "]"
-  go (x : xs) = pp x ++ ",\n" ++ go xs
+  go []        = "]"
+  go (x : xs') = pp x ++ ",\n" ++ go xs'
+-}
