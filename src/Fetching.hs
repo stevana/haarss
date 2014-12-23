@@ -82,9 +82,9 @@ downloadFeeds urls callback =
   map downloadToFeed . zip urls <$> download urls callback feedParser
   where
   downloadToFeed :: (String, (Maybe Feed, History)) -> AnnFeed
-  downloadToFeed (_,   (Just f,  h)) = defaultAnn f &
+  downloadToFeed (_,   (Just f,  h)) = defAnnFeed f &
                                          history .~ [h]
-  downloadToFeed (url, (Nothing, h)) = defaultAnn f &
+  downloadToFeed (url, (Nothing, h)) = defAnnFeed f &
                                          history .~ [h]
     where
     f = newEmptyFeed AtomKind

@@ -51,7 +51,10 @@ import Data.Typeable
 import Data.Monoid
 import qualified Data.ByteString as BS
 import Data.Serialize
+import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time
+import Data.Time.Format
 
 import Control.Applicative
 import Control.Lens hiding (view)
@@ -59,6 +62,7 @@ import Control.Exception
 import Control.Monad
 import System.Exit
 import System.Process
+import System.Locale
 
 import qualified Graphics.Vty as Vty
 import Graphics.Vty.Prelude
@@ -174,11 +178,14 @@ setupReactive config vty iniModel eEvent = do
           isResize (Vty.EvResize _ _) = True
           isResize _                  = False
 
-    let eFeeds :: Event [AnnFeed]
+    let eFeeds :: Event (Text, [AnnFeed])
         eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
           where
-          io :: IO [AnnFeed]
-          io = downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
+          io :: IO (Text, [AnnFeed])
+          io = do
+            time <- formatTime defaultTimeLocale rfc822DateFormat <$> getCurrentTime
+            fs   <- downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
+            return (T.pack time, fs)
 
     -- XXX: Moving after update feed causes the wrong feed to be
     -- updated. This is currently "fixed" by not allowing any commands
@@ -230,14 +237,13 @@ setupReactive config vty iniModel eEvent = do
                    , cmdSem Search $ search $ T.pack "agda" -- XXX
 
                    , (\f model ->
-                       model & browsing.feeds.curr %~ flip Feed.Annotated.merge f) <$> eFeed
+                       model & browsing.feeds.curr %~ flip Feed.Annotated.merge f)
+                         <$> eFeed
 
                    -- XXX: this loses the current position (maybe not bad?)
-                   , (\fs model -> model & browsing.feeds .~ makeZip
-                         (mergeFeeds (closeZip (model^.browsing.feeds)) fs)) <$> eFeeds
-                         -- mergeFeeds (closeZip $ model^.feeds) fs) <$> eFeeds
-
-                         -- makeModel feeds (model^.info.maxRows) <$> eFeeds
+                   , (\(date, fs) model -> model & browsing.feeds .~ makeZip
+                         (addOverviewFeed date (mergeFeeds
+                           (closeZip (model^.browsing.feeds)) fs))) <$> eFeeds
 
                    , (\model -> model & downloading %~ pred) <$ eFeedDownloaded
                    ]

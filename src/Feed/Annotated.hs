@@ -1,9 +1,11 @@
-{-# LANGUAGE TemplateHaskell, DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, DeriveGeneric #-}
 
 module Feed.Annotated where
 
 import Control.Lens
 import Data.List (find)
+import Data.Monoid
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Serialize
 import GHC.Generics (Generic)
@@ -21,6 +23,9 @@ data AnnItem = AnnItem
 
 makeLenses ''AnnItem
 
+defAnnItem :: Item -> AnnItem
+defAnnItem i = AnnItem i False
+
 instance Show AnnItem where
   show i = i^.item.itemTitle.to (maybe "(no item title)" T.unpack)
 
@@ -31,6 +36,9 @@ data AnnFeed = AnnFeed
   deriving Generic
 
 makeLenses ''AnnFeed
+
+defAnnFeed :: Feed -> AnnFeed
+defAnnFeed f = AnnFeed (f & feedItems.traverse %~ defAnnItem) []
 
 instance Show AnnFeed where
   show f = f^.feed.feedTitle.to (maybe "(no title)" T.unpack)
@@ -52,8 +60,28 @@ mergeItems old new = map (\n -> keepOldAnn (n^.item) old) new
     Nothing -> AnnItem n False
     Just o  -> AnnItem n (o^.isRead)
 
-defaultAnn :: Feed -> AnnFeed
-defaultAnn f = AnnFeed (f & feedItems.traverse %~ flip AnnItem False) []
+------------------------------------------------------------------------
+
+addOverviewFeed :: Text -> [AnnFeed] -> [AnnFeed]
+addOverviewFeed time fs = overview : fs
+  where
+  overview :: AnnFeed
+  overview = AnnFeed
+    { _feed    = newEmptyFeed AtomKind
+      & feedTitle       ?~ "(New headlines)"
+      & feedDescription ?~ "(New headlines)"
+      & feedLastUpdate  ?~ time
+      & feedItems       .~ is
+    , _history = []
+    }
+    where
+    is :: [AnnItem]
+    is = is' & mapped %~ \(i, mt) -> i & item.itemTitle %~ \t ->
+      mconcat [Just "(", mt, Just ") ", t]
+      where
+      is' :: [(AnnItem, Maybe Text)]
+      is' = fs & concatMapOf folded (\f -> zip
+        (f^.feed.feedItems) (cycle [f^.feed.feedTitle]))
 
 ------------------------------------------------------------------------
 

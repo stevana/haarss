@@ -281,7 +281,7 @@ initialModel :: Config -> Model
 initialModel cfg = makeModel fs
   where
   fs :: [AnnFeed]
-  fs = cfg^.urls & mapped %~ \url -> defaultAnn $
+  fs = cfg^.urls & mapped %~ \url -> defAnnFeed $
          newEmptyFeed AtomKind & feedTitle ?~ T.pack url
                                & feedHome  .~ T.pack url
 
