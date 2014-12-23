@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveFoldable,
-             DeriveTraversable, RecordWildCards #-}
+             DeriveTraversable, RecordWildCards, StandaloneDeriving #-}
 
 module Model where
 
@@ -7,7 +7,7 @@ import Control.Applicative
 import Control.Lens
 import Data.Foldable (Foldable)
 import Data.Serialize
-import Test.QuickCheck
+import Test.QuickCheck as QC
 
 import Constants
 import Config
@@ -19,6 +19,8 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
 import System.Directory (doesFileExist)
+import Fetching.History
+import Data.Time
 
 ----------------------------------------------------------------------
 
@@ -32,17 +34,14 @@ data Zip a = Zip
 makeLenses ''Zip
 
 data Dir = Up | Down | In | Out | Top | Bot
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Enum)
 
 makeZip :: [a] -> Zip a
-makeZip [] = error "makeZip: empty"
+makeZip []       = error "makeZip: empty"
 makeZip (x : xs) = Zip [] x xs
 
 closeZip :: Zip a -> [a]
-closeZip (Zip xs z ys) = reverse xs ++ z : ys
-
-prop_makeClose :: Eq a => NonEmptyList a -> Bool
-prop_makeClose (NonEmpty xs) = closeZip (makeZip xs) == xs
+closeZip (Zip xs z ys) = xs ++ z : ys
 
 moveZip :: Dir -> Zip a -> Zip a
 moveZip Up   z@(Zip [] _ _)      = z
@@ -56,6 +55,21 @@ moveZip Bot  z@(Zip xs c ys)     = case ys of
                                      _ : _ -> Zip (xs ++ c : take (length ys - 1) ys)
                                                   (last ys) []
 moveZip _    z                   = z
+
+------------------------------------------------------------------------
+
+instance Arbitrary Dir where
+  arbitrary = QC.elements (enumFrom Up)
+
+prop_makeMoveClose :: NonEmptyList Int -> [Dir] -> Bool
+prop_makeMoveClose (NonEmpty xs) dirs =
+  closeZip (apply moves (makeZip xs)) == xs
+  where
+  moves :: [Zip a -> Zip a]
+  moves = map moveZip dirs
+
+apply :: [a -> a] -> a -> a
+apply fs x = foldl (\ih f -> f ih) x fs
 
 ------------------------------------------------------------------------
 
@@ -297,3 +311,70 @@ readSavedModel cfg = do
 instance Serialize Model where
   put m = put $ m^.browsing._TheFeeds.to closeZip
   get   = makeModel <$> get
+
+prop_serialisation :: NonEmptyList AnnFeed -> [Dir] -> Bool
+prop_serialisation (NonEmpty fs) dirs =
+  m'^?browsing._TheFeeds.to closeZip == m^?browsing._TheFeeds.to closeZip
+  where
+  moves :: [Model -> Model]
+  moves = map move $ dirs ++ [Out, Out, Out]
+
+  m :: Model
+  m = apply moves $ makeModel fs
+
+  m' :: Model
+  m' = decode (encode m)^?!_Right
+
+------------------------------------------------------------------------
+
+deriving instance Eq a => Eq (Zip a)
+deriving instance Eq a => Eq (Feed' a)
+deriving instance Eq FeedKind
+deriving instance Eq AnnFeed
+deriving instance Eq AnnItem
+deriving instance Eq Fetching.History.History
+deriving instance Eq FailureReason
+deriving instance Eq HttpExceptionSimple
+
+instance Arbitrary AnnFeed where
+  arbitrary = AnnFeed <$> arbitrary <*> arbitrary
+
+instance Arbitrary a => Arbitrary (Feed' a) where
+  arbitrary = Feed <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+                   <*> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary AnnItem where
+  arbitrary = AnnItem <$> arbitrary <*> arbitrary
+
+instance Arbitrary FeedKind where
+  arbitrary = QC.elements (enumFrom AtomKind)
+
+instance Arbitrary History where
+  arbitrary = oneof
+    [ Fetching.History.Success <$> arbitrary
+    , Fetching.History.Failure <$> arbitrary <*> arbitrary
+    ]
+
+instance Arbitrary FailureReason where
+  arbitrary = oneof
+    [ -- DownloadFailure HttpExceptionSimple
+      ParseFailure <$> arbitrary
+    , pure TimeoutFailure
+    , pure UnknownFailure
+    ]
+
+instance Arbitrary UTCTime where
+  arbitrary = UTCTime <$> arbitrary <*> arbitrary
+
+instance Arbitrary Day where
+  arbitrary = ModifiedJulianDay <$> arbitrary
+
+instance Arbitrary DiffTime where
+  arbitrary = secondsToDiffTime <$> arbitrary
+
+instance Arbitrary Item where
+  arbitrary = Item <$> arbitrary <*> arbitrary <*> arbitrary <*>
+                       arbitrary <*> arbitrary
+
+instance Arbitrary Text where
+  arbitrary = T.pack <$> arbitrary
