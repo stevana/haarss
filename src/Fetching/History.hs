@@ -3,26 +3,27 @@
 
 module Fetching.History where
 
-import Control.Monad
+import Control.Applicative
 import Data.Serialize
-import Data.Time (UTCTime(..), DiffTime, Day(..), toModifiedJulianDay)
+import Data.Time (UTCTime(..), DiffTime, Day(..), toModifiedJulianDay, secondsToDiffTime)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (HttpException(..))
 import Network.HTTP.Types.Status (Status(..))
+import Test.QuickCheck hiding (Success, Failure)
 
 ------------------------------------------------------------------------
 
 data History
   = Success UTCTime
   | Failure UTCTime FailureReason
-  deriving Generic
+  deriving (Eq, Generic)
 
 data FailureReason
   = DownloadFailure HttpExceptionSimple
   | ParseFailure String
   | TimeoutFailure
   | UnknownFailure
-  deriving Generic
+  deriving (Eq, Generic)
 
 instance Show FailureReason where
   show (DownloadFailure (StatusCodeException' s))
@@ -36,7 +37,7 @@ instance Show FailureReason where
 data HttpExceptionSimple
   = StatusCodeException' Status
   | OtherException
-  deriving Generic
+  deriving (Eq, Generic)
 
 simplifyHttpException :: HttpException -> HttpExceptionSimple
 simplifyHttpException e = case e of
@@ -75,15 +76,15 @@ failed _                 = False
 -- https://www.haskell.org/pipermail/haskell-cafe/2012-January/098683.html
 
 instance Serialize UTCTime where
-  get                    = liftM2 UTCTime get get
+  get                    = UTCTime <$> get <*> get
   put (UTCTime day time) = put day >> put time
 
 instance Serialize Day where
-  get = liftM ModifiedJulianDay get
+  get = ModifiedJulianDay <$> get
   put = put . toModifiedJulianDay
 
 instance Serialize DiffTime where
-  get = liftM fromRational get
+  get = fromRational <$> get
   put = put . toRational
 
 
@@ -93,3 +94,26 @@ instance Serialize FailureReason       where
 
 deriving instance Generic Status
 instance Serialize Status              where
+
+instance Arbitrary History where
+  arbitrary = oneof
+    [ Fetching.History.Success <$> arbitrary
+    , Fetching.History.Failure <$> arbitrary <*> arbitrary
+    ]
+
+instance Arbitrary FailureReason where
+  arbitrary = oneof
+    [ -- DownloadFailure HttpExceptionSimple
+      ParseFailure <$> arbitrary
+    , pure TimeoutFailure
+    , pure UnknownFailure
+    ]
+
+instance Arbitrary UTCTime where
+  arbitrary = UTCTime <$> arbitrary <*> arbitrary
+
+instance Arbitrary Day where
+  arbitrary = ModifiedJulianDay <$> arbitrary
+
+instance Arbitrary DiffTime where
+  arbitrary = secondsToDiffTime <$> arbitrary

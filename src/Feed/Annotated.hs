@@ -1,14 +1,18 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, DeriveGeneric,
+             StandaloneDeriving #-}
 
 module Feed.Annotated where
 
+import Control.Applicative
 import Control.Lens
 import Data.List (find)
 import Data.Monoid
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time
 import Data.Serialize
 import GHC.Generics (Generic)
+import Test.QuickCheck
 
 import Feed.Feed
 import Fetching.History
@@ -43,22 +47,26 @@ defAnnFeed f = AnnFeed (f & feedItems.traverse %~ defAnnItem) []
 instance Show AnnFeed where
   show f = f^.feed.feedTitle.to (maybe "(no title)" T.unpack)
 
+-- XXX: Needs to be more flexible in the future; can't assume that the
+-- old and new feeds will be as many and positioned the same...
 mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
 mergeFeeds = zipWith merge
 
 merge :: AnnFeed -> AnnFeed -> AnnFeed
-merge old new = new & feed.feedItems .~ mergeItems (old^.feed.feedItems)
-                                                   (new^.feed.feedItems)
-                    & history %~ (++ old^.history)
+merge old new = new
+  & feed.feedItems .~ mergeItems (old^.feed.feedItems)
+                                 (new^.feed.feedItems)
+  & history %~ \[h] -> take 10 (h : old^.history)
 
 -- XXX: O(new^old)...
 mergeItems :: [AnnItem] -> [AnnItem] -> [AnnItem]
-mergeItems old new = map (\n -> keepOldAnn (n^.item) old) new
+mergeItems old new = map (\n -> keepOldAnn (n^.item)) new
   where
-  keepOldAnn :: Item -> [AnnItem] -> AnnItem
-  keepOldAnn n old' = case find (\o -> n == o^.item) old' of
-    Nothing -> AnnItem n False
-    Just o  -> AnnItem n (o^.isRead)
+  keepOldAnn :: Item -> AnnItem
+  keepOldAnn n =
+    case find (\o -> n^.itemTitle == o^.item.itemTitle) old of
+      Nothing -> AnnItem n False
+      Just o  -> AnnItem n (o^.isRead)
 
 ------------------------------------------------------------------------
 
@@ -85,5 +93,14 @@ addOverviewFeed time fs = overview : fs
 
 ------------------------------------------------------------------------
 
+deriving instance Eq AnnFeed
+deriving instance Eq AnnItem
+
 instance Serialize AnnFeed  where
 instance Serialize AnnItem  where
+
+instance Arbitrary AnnFeed where
+  arbitrary = AnnFeed <$> arbitrary <*> arbitrary
+
+instance Arbitrary AnnItem where
+  arbitrary = AnnItem <$> arbitrary <*> arbitrary

@@ -1,18 +1,19 @@
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
     TypeSynonymInstances, TemplateHaskell, OverloadedStrings,
-    DeriveGeneric #-}
+    DeriveGeneric, StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Feed.Feed where
 
-import Data.Foldable (Foldable)
+import Control.Applicative
 import Control.Lens
+import Data.Foldable (Foldable)
+import Data.Serialize
 import Data.Text (Text)
 import qualified Data.Text as T
-
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import GHC.Generics (Generic)
-import Data.Serialize
-import Data.Text.Encoding
+import Test.QuickCheck
 
 ------------------------------------------------------------------------
 
@@ -66,6 +67,9 @@ addItem item feed = feed & feedItems %~ cons item
 
 ------------------------------------------------------------------------
 
+deriving instance Eq a => Eq (Feed' a)
+deriving instance Eq FeedKind
+
 instance Serialize FeedKind where
 instance Serialize Item     where
 instance Serialize a => Serialize (Feed' a) where
@@ -73,3 +77,17 @@ instance Serialize a => Serialize (Feed' a) where
 instance Serialize Text where
   put txt = put $ encodeUtf8 txt
   get     = fmap decodeUtf8 get
+
+instance Arbitrary Text where
+  arbitrary = T.pack <$> arbitrary
+
+instance Arbitrary FeedKind where
+  arbitrary = Test.QuickCheck.elements (enumFrom AtomKind)
+
+instance Arbitrary a => Arbitrary (Feed' a) where
+  arbitrary = Feed <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+                   <*> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary Item where
+  arbitrary = Item <$> arbitrary <*> arbitrary <*> arbitrary <*>
+                       arbitrary <*> arbitrary

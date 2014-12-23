@@ -19,8 +19,6 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
 import System.Directory (doesFileExist)
-import Fetching.History
-import Data.Time
 
 ----------------------------------------------------------------------
 
@@ -29,7 +27,7 @@ data Zip a = Zip
   , _curr :: a
   , _next :: [a]
   }
-  deriving (Functor, Foldable, Traversable)
+  deriving (Eq, Functor, Foldable, Traversable)
 
 makeLenses ''Zip
 
@@ -324,57 +322,3 @@ prop_serialisation (NonEmpty fs) dirs =
 
   m' :: Model
   m' = decode (encode m)^?!_Right
-
-------------------------------------------------------------------------
-
-deriving instance Eq a => Eq (Zip a)
-deriving instance Eq a => Eq (Feed' a)
-deriving instance Eq FeedKind
-deriving instance Eq AnnFeed
-deriving instance Eq AnnItem
-deriving instance Eq Fetching.History.History
-deriving instance Eq FailureReason
-deriving instance Eq HttpExceptionSimple
-
-instance Arbitrary AnnFeed where
-  arbitrary = AnnFeed <$> arbitrary <*> arbitrary
-
-instance Arbitrary a => Arbitrary (Feed' a) where
-  arbitrary = Feed <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-                   <*> arbitrary <*> arbitrary <*> arbitrary
-
-instance Arbitrary AnnItem where
-  arbitrary = AnnItem <$> arbitrary <*> arbitrary
-
-instance Arbitrary FeedKind where
-  arbitrary = QC.elements (enumFrom AtomKind)
-
-instance Arbitrary History where
-  arbitrary = oneof
-    [ Fetching.History.Success <$> arbitrary
-    , Fetching.History.Failure <$> arbitrary <*> arbitrary
-    ]
-
-instance Arbitrary FailureReason where
-  arbitrary = oneof
-    [ -- DownloadFailure HttpExceptionSimple
-      ParseFailure <$> arbitrary
-    , pure TimeoutFailure
-    , pure UnknownFailure
-    ]
-
-instance Arbitrary UTCTime where
-  arbitrary = UTCTime <$> arbitrary <*> arbitrary
-
-instance Arbitrary Day where
-  arbitrary = ModifiedJulianDay <$> arbitrary
-
-instance Arbitrary DiffTime where
-  arbitrary = secondsToDiffTime <$> arbitrary
-
-instance Arbitrary Item where
-  arbitrary = Item <$> arbitrary <*> arbitrary <*> arbitrary <*>
-                       arbitrary <*> arbitrary
-
-instance Arbitrary Text where
-  arbitrary = T.pack <$> arbitrary
