@@ -1,11 +1,13 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
 
 module View where
 
-import Control.Lens hiding (pre)
+import Control.Lens
+import Data.Char (chr)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Graphics.Vty
+import Numeric (readHex)
 
 import Feed.Feed
 import Feed.Annotated
@@ -61,6 +63,40 @@ fmt maxLen = map T.unwords . go 0 [] . T.words
     | otherwise                = go (rowLen + wl + 1) (w : acc) ws
     where
     wl = T.length w
+
+removeHtml :: Text -> Text
+removeHtml (T.uncons -> Nothing)       = T.empty
+removeHtml (T.uncons -> Just ('<', t)) =
+  case T.break (== '>') t & _2 %~ T.uncons of
+    -- XXX: fmt removes the newlines...
+    ("p",     Just ('>', t')) -> "\n\n" `T.append` removeHtml t'
+    -- XXX: might want to drop everything inside the style tag...
+    ("style", Just ('>', t')) -> removeHtml t'
+    (_,       Just ('>', t')) -> removeHtml t'
+    _                         -> T.empty
+removeHtml (T.uncons -> Just ('&', t)) =
+  case T.break (== ';') t & _2 %~ T.uncons of
+    (code, Just (_, t')) -> decode code `T.append` removeHtml t'
+    _                    -> T.empty
+  where
+  decode :: Text -> Text
+  decode "lt"                            = T.singleton '<'
+  decode "gt"                            = T.singleton '>'
+  decode "amp"                           = T.singleton '&'
+  decode "quot"                          = T.singleton '"'
+  decode "ndash"                         = T.singleton '–'
+  decode "mdash"                         = T.singleton '—'
+  decode t@(T.unpack -> '#' : 'x' : hex) = fromHex hex t
+  decode t@(T.unpack -> '#' : 'X' : hex) = fromHex hex t
+  decode (T.unpack   -> '#' : dec)       = T.singleton $ chr $ read dec
+  decode t                               = '&' `T.cons` t `T.snoc` ';'
+
+  fromHex :: String -> Text -> Text
+  fromHex s t = case readHex s of
+    [(i, "")] -> T.singleton $ chr i
+    _         -> '&' `T.cons` t `T.snoc` ';'
+removeHtml (T.uncons -> Just (c, t)) = c `T.cons` removeHtml t
+removeHtml (T.uncons -> _)           = error "Impossible."
 
 unread :: AnnFeed -> Text
 unread f = f^.feed.feedItems.to
@@ -119,7 +155,7 @@ drawModel m =
       , drawZip is itemImage focusedItemImage p h
       ]
 
-    TheText  fs is i s -> vertCat
+    TheText  fs _ i s -> vertCat
       [ boldly (desc fs^.be "")
       , separator
       -- XXX: use width instead of 80 below.
@@ -129,7 +165,7 @@ drawModel m =
       -- XXX: replace 50 below with height.
       , drawList (\t -> char defAttr ' ' <|> normal t) $
           i^.item.itemDescription.be
-            "(no desc)".to (take 50 . drop s . fmt (min 50 w))
+            "(no desc)".to (take 50 . drop s . fmt (min 50 w) . removeHtml)
       ]
 
   where
