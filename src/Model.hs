@@ -8,6 +8,7 @@ import Control.Lens
 import Data.Foldable (Foldable)
 import Data.Serialize
 import Test.QuickCheck as QC
+import System.Locale
 
 import Constants
 import Config
@@ -19,6 +20,7 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
 import System.Directory (doesFileExist)
+import Data.Time
 
 ----------------------------------------------------------------------
 
@@ -275,17 +277,21 @@ instance Show VtyStuff where
 makeModel :: [AnnFeed] -> Model
 makeModel fs = Model (TheFeeds (makeZip fs)) 0 initialVtyStuff
 
-initialModel :: Config -> Model
-initialModel cfg = makeModel fs
+initialModel :: UTCTime -> Config -> Model
+initialModel time cfg = makeModel (addOverviewFeed time fs)
   where
   fs :: [AnnFeed]
   fs = cfg^.urls & mapped %~ \url -> defAnnFeed $
-         newEmptyFeed AtomKind & feedTitle ?~ T.pack url
-                               & feedHome  .~ T.pack url
+         newEmptyFeed AtomKind
+           & feedTitle      ?~ T.pack url
+           & feedHome       .~ T.pack url
+           & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
+                                 rfc822DateFormat time)
 
--- XXX: Better name? Explain magic 6.
+
+-- XXX: Better name?
 setHeight :: Int -> Model -> Model
-setHeight h m = m & vty.height .~ h - 6
+setHeight h m = m & vty.height .~ h
 
 ------------------------------------------------------------------------
 
@@ -295,9 +301,10 @@ readSavedModel :: Config -> IO Model
 readSavedModel cfg = do
   modelPath <- getModelPath
   exists    <- doesFileExist modelPath
+  time      <- getCurrentTime
 
   if not exists
-    then return $ initialModel cfg
+    then return $ initialModel time cfg
     else do
       em <- decode <$> BS.readFile modelPath
       case em of

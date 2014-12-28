@@ -6,13 +6,15 @@ module Feed.Annotated where
 import Control.Applicative
 import Control.Lens
 import Data.List (find)
+import Data.Maybe
 import Data.Monoid
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
 import Data.Serialize
 import GHC.Generics (Generic)
-import Test.QuickCheck
+import System.Locale
+import Test.QuickCheck hiding (Success, Failure)
 
 import Feed.Feed
 import Fetching.History
@@ -23,7 +25,7 @@ data AnnItem = AnnItem
   { _item   :: Item
   , _isRead :: Bool
   }
-  deriving Generic
+  deriving (Eq, Generic)
 
 makeLenses ''AnnItem
 
@@ -37,12 +39,19 @@ data AnnFeed = AnnFeed
   { _feed    :: Feed' [AnnItem]
   , _history :: [History]
   }
-  deriving Generic
+  deriving (Eq, Generic)
 
 makeLenses ''AnnFeed
 
+newEmptyAnnFeed :: AnnFeed
+newEmptyAnnFeed = AnnFeed
+  { _feed    = newEmptyFeed AtomKind & feedItems.traverse %~ defAnnItem
+  , _history = []
+  }
+
 defAnnFeed :: Feed -> AnnFeed
-defAnnFeed f = AnnFeed (f & feedItems.traverse %~ defAnnItem) []
+defAnnFeed f = newEmptyAnnFeed
+  & feed .~ (f & feedItems.traverse %~ defAnnItem)
 
 instance Show AnnFeed where
   show f = f^.feed.feedTitle.to (maybe "(no title)" T.unpack)
@@ -53,10 +62,16 @@ mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
 mergeFeeds = zipWith merge
 
 merge :: AnnFeed -> AnnFeed -> AnnFeed
-merge old new = new
-  & feed.feedItems .~ mergeItems (old^.feed.feedItems)
-                                 (new^.feed.feedItems)
-  & history %~ \[h] -> take 10 (h : old^.history)
+merge old new
+  | new^.history^?_head._Failure & isJust
+  = old & history %~ \h -> prune (new^.history ++ h)
+
+  | otherwise
+  = new & feed.feedItems .~ mergeItems (old^.feed.feedItems)
+                                       (new^.feed.feedItems)
+        & history %~ \h -> prune (h ++ old^.history)
+  where
+  prune = take 10
 
 -- XXX: O(new^old)...
 mergeItems :: [AnnItem] -> [AnnItem] -> [AnnItem]
@@ -64,24 +79,34 @@ mergeItems old new = map (\n -> keepOldAnn (n^.item)) new
   where
   keepOldAnn :: Item -> AnnItem
   keepOldAnn n =
-    case find (\o -> n^.itemTitle == o^.item.itemTitle) old of
+    -- XXX: Compare only (hashes of) titles and descriptions?
+    case find (\o -> n == o^.item) old of
       Nothing -> AnnItem n False
       Just o  -> AnnItem n (o^.isRead)
 
+-- | The function for merging items is idempotent.
+prop_mergeItemsIdempotent :: [AnnItem] -> Bool
+prop_mergeItemsIdempotent is = mergeItems is is == is
+
+prop_isReadKept :: [AnnItem] -> Bool
+prop_isReadKept is = andOf (traverse.isRead) $
+  mergeItems (is & mapped.isRead .~ True) is
+
 ------------------------------------------------------------------------
 
-addOverviewFeed :: Text -> [AnnFeed] -> [AnnFeed]
+addOverviewFeed :: UTCTime -> [AnnFeed] -> [AnnFeed]
 addOverviewFeed time fs = overview : fs
   where
+  rfc822Time = formatTime defaultTimeLocale rfc822DateFormat time
+
   overview :: AnnFeed
-  overview = AnnFeed
-    { _feed    = newEmptyFeed AtomKind
+  overview = newEmptyAnnFeed
+    & feed    .~ (newEmptyFeed AtomKind
       & feedTitle       ?~ "(New headlines)"
       & feedDescription ?~ "(New headlines)"
-      & feedLastUpdate  ?~ time
-      & feedItems       .~ is
-    , _history = []
-    }
+      & feedLastUpdate  ?~ T.pack rfc822Time
+      & feedItems       .~ is)
+    & history .~ [Success time]
     where
     is :: [AnnItem]
     is = is' & mapped %~ \(i, mt) -> i & item.itemTitle %~ \t ->
@@ -89,12 +114,22 @@ addOverviewFeed time fs = overview : fs
       where
       is' :: [(AnnItem, Maybe Text)]
       is' = fs & concatMapOf folded (\f -> zip
-        (f^.feed.feedItems) (cycle [f^.feed.feedTitle]))
+        (f^.feed.feedItems^..folded.filtered (not . _isRead))
+        (cycle [f^.feed.feedTitle]))
+
+-- | The overview feed should have as many items as there are unread
+-- items in the feeds from which the overview was created.
+prop_overviewLength :: UTCTime -> [AnnFeed] -> Bool
+prop_overviewLength time fs =
+  overview^.feed.feedItems.to length == sumOf folded fs'
+  where
+  fs' :: [Int]
+  fs' = fs^..folded.feed.feedItems & mapped %~ length . filter _isRead
+
+  overview :: AnnFeed
+  overview = head $ addOverviewFeed time fs
 
 ------------------------------------------------------------------------
-
-deriving instance Eq AnnFeed
-deriving instance Eq AnnItem
 
 instance Serialize AnnFeed  where
 instance Serialize AnnItem  where

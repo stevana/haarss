@@ -1,9 +1,10 @@
-{-# LANGUAGE StandaloneDeriving, DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell, StandaloneDeriving, DeriveGeneric #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Fetching.History where
 
 import Control.Applicative
+import Control.Lens
 import Data.Serialize
 import Data.Time (UTCTime(..), DiffTime, Day(..), toModifiedJulianDay, secondsToDiffTime)
 import GHC.Generics (Generic)
@@ -16,7 +17,7 @@ import Test.QuickCheck hiding (Success, Failure)
 data History
   = Success UTCTime
   | Failure UTCTime FailureReason
-  deriving (Eq, Generic)
+  deriving (Eq, Show, Generic)
 
 data FailureReason
   = DownloadFailure HttpExceptionSimple
@@ -37,7 +38,9 @@ instance Show FailureReason where
 data HttpExceptionSimple
   = StatusCodeException' Status
   | OtherException
-  deriving (Eq, Generic)
+  deriving (Eq, Show, Generic)
+
+makePrisms ''History
 
 simplifyHttpException :: HttpException -> HttpExceptionSimple
 simplifyHttpException e = case e of
@@ -86,7 +89,6 @@ instance Serialize Day where
 instance Serialize DiffTime where
   get = fromRational <$> get
   put = put . toRational
-
 
 instance Serialize HttpExceptionSimple where
 instance Serialize History             where
