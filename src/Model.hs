@@ -9,7 +9,6 @@ import Control.Applicative
 import Control.Monad
 import Control.Lens hiding (below)
 import Data.Foldable
-import Data.Bitraversable
 import qualified Data.Sequence as Seq
 import Data.Serialize
 import Data.Text (Text)
@@ -51,7 +50,6 @@ data Focus
   | TheText
       { _annFeed  :: AnnFeed
       , _annItems :: Window AnnItem
-      , _annItem  :: AnnItem
       , _scroll   :: Int
       }
   deriving Eq
@@ -88,16 +86,16 @@ items = lens g s
   where
   g :: Model -> Window AnnItem
   g m = case m^.browsing.focus of
-    TheFeed  f        -> f^.feed.feedItems.to (makeWindow (m^.feeds.to size))
-    TheItems _ is     -> is
-    TheText  _ is _ _ -> is
+    TheFeed  f      -> f^.feed.feedItems.to (makeWindow (m^.feeds.to size))
+    TheItems _ is   -> is
+    TheText  _ is _ -> is
 
   s :: Model -> Window AnnItem -> Model
   s m w = case m^.browsing.focus of
-    TheFeed  f        -> m & browsing.focus .~ TheFeed (f & feed.feedItems .~
-                                                              closeWindow w)
-    TheItems f _      -> m & browsing.focus .~ TheItems f w
-    TheText  f _ i j  -> m & browsing.focus .~ TheText  f w i j
+    TheFeed  f      -> m & browsing.focus .~ TheFeed (f & feed.feedItems .~
+                                                            closeWindow w)
+    TheItems f _    -> m & browsing.focus .~ TheItems f w
+    TheText  f _ i  -> m & browsing.focus .~ TheText  f w i
 
 -- Note that this is only true modulo not caring about the size.
 prop_itemsSetView :: Model -> Window AnnItem -> Bool
@@ -134,7 +132,7 @@ instance Show Model where
   show m | otherwise       = unlines
     [ "Browsing the text."
     , ""
-    , m^.browsing.focus.annItem.item.itemDescription
+    , m^.browsing.focus.annItems.focus.item.itemDescription
         .be "(no desc)".to T.unpack
     , ""
     , "Scroll: " ++ m^.browsing.focus.scroll.to show
@@ -143,8 +141,8 @@ instance Show Model where
 instance Show Focus where
   show (TheFeed f)       = show f
   show (TheItems _ is)   = show is
-  show (TheText _ _ i s) = unlines
-    [ "TheText: " ++ i^.item.itemDescription.to show
+  show (TheText _ is s) = unlines
+    [ "TheText: " ++ is^.focus.item.itemDescription.to show
     , ""
     , "Scroll: " ++ show s
     ]
@@ -156,7 +154,7 @@ instance Arbitrary Focus where
   arbitrary = oneof
     [ liftM  TheFeed  arbitrary
     , liftM2 TheItems arbitrary arbitrary
-    , liftM4 TheText  arbitrary arbitrary arbitrary arbitrary
+    , liftM3 TheText  arbitrary arbitrary arbitrary
     ]
 
 instance Serialize Model where
@@ -228,14 +226,14 @@ moveBrowse d fz = case fz^.focus of
     _   -> moveWin' d TheFeed _annFeed fz
 
   TheItems f iz   -> case d of
-    In  -> fz & focus .~ TheText  f iz (iz^.focus) 0
+    In  -> fz & focus .~ TheText  f (iz & focus.isRead .~ True) 0
     Out -> fz & focus .~ TheFeed (f & feed.feedItems .~ closeWindow iz)
     _   -> fz & focus .~ TheItems f (moveWin d iz)
 
-  TheText  f iz i s -> case d of
+  TheText  f iz s -> case d of
     In  -> fz & focus .~ TheItems f iz
     Out -> fz & focus .~ TheItems f iz
-    _   -> fz & focus .~ TheText  f (moveWin d iz) i s
+    _   -> fz & focus .~ TheText  f (moveWin d iz & focus.isRead .~ True) s
 
 move :: Dir -> (Model -> Model)
 move d m = m & browsing %~ moveBrowse d
@@ -266,11 +264,15 @@ toggleReadStatus m = m & browsing.focus.annItems.focus.isRead %~ not
 -- XXX: Magic string...
 makeAllAsRead :: Model -> Model
 makeAllAsRead m
-  | browsingFeeds m ||
-    m^.feeds.focus.feed.feedTitle == Just "(New headlines)"
+  | browsingFeeds m
   = m & feeds.both.feed.feedItems.traverse.isRead .~ True
 
-  | otherwise = m & feeds.bitraverse pure.feed.feedItems.traverse.isRead .~ True
+  | browsingItems m &&
+    m^.feeds.focus.feed.feedTitle == Just "(New headlines)"
+  = m & feeds.both.feed.feedItems.traverse.isRead .~ True
+      & items.both.isRead .~ True
+
+  | otherwise = m & items.both.isRead .~ True
 
 feedDownloaded :: AnnFeed -> Model -> Model
 feedDownloaded f m = m & browsing.focus.annFeed %~ Feed.Annotated.merge f
