@@ -1,18 +1,95 @@
 {-# LANGUAGE OverloadedStrings, ViewPatterns #-}
 
-module View where
+module View (viewModel) where
 
 import Control.Lens
 import Data.Char (chr)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Graphics.Vty
+import Data.Foldable
+import Data.Sequence (Seq)
+import Graphics.Vty hiding (resize)
+import Graphics.Vty.Prelude
 import Numeric (readHex)
 
 import Feed.Feed
 import Feed.Annotated
 import Fetching.History
 import Model
+import Model.Window
+
+------------------------------------------------------------------------
+
+viewModel :: Vty -> Model -> IO ()
+viewModel v m = do
+  sz  <- displayBounds $ outputIface v
+  update v $ picForImage $ render m sz
+
+renderDebug :: Model -> DisplayRegion -> Image
+renderDebug m sz = vertCat
+  [ separator
+  , drawList (string defAttr) (lines (show m))
+  , string defAttr ""
+  , string defAttr ("Height: " ++ show (regionHeight sz))
+  ]
+
+render ::  Model -> DisplayRegion -> Image
+render m sz = vertCat
+  [ bar " haarss 0.1"
+  , separator
+  , resizeHeight (regionHeight sz - 5) (drawModel m (regionHeight sz))
+  , separator
+  , bar (T.pack (status (m^.downloading)))
+  , separator
+  ]
+  where
+  status :: Int -> String
+  status 0 = ""
+  status n = " Downloading (" ++ show n ++ " feed" ++
+               (if n == 1 then "" else "s") ++ " to go)"
+
+drawModel :: Model -> Int -> Image
+drawModel m h = case m^.browsing.focus of
+
+  TheFeed _         -> drawWin (m^.feeds)
+                               feedImage focusedFeedImage
+
+  TheItems f is     -> vertCat
+    [ boldly (desc f^.be "")
+    , separator
+    , drawWin is itemImage focusedItemImage
+    ]
+
+  TheText  f _ i s -> vertCat
+    [ boldly (desc f^.be "")
+    , separator
+    , normal (T.center (w - 1) ' ' (i^.item.itemTitle.be ""))
+    , separator
+    , drawList (\t -> char defAttr ' ' <|> normal t) $
+        i^.item.itemDescription.be
+          "(no desc)".to (take h . drop s . fmt (min 60 w) . removeHtml)
+    ]
+
+  where
+  w = 72
+  desc :: AnnFeed -> Maybe Text
+  desc f = asumOf both (f^.feed.feedDescription,
+                        f^.feed.feedTitle)
+
+------------------------------------------------------------------------
+
+drawWin :: Window a -> (a -> Image) -> (a -> Image) -> Image
+drawWin w e f = vertCat
+  [ drawSeq e (w^.prev)
+  , w^.focus.to f
+  , drawSeq e (w^.next)
+  ]
+
+drawSeq :: (a -> Image) -> Seq a -> Image
+drawSeq f = vertCat . toList . fmap f
+
+drawList :: (a -> Image) -> [a] -> Image
+drawList f = vertCat . map f
 
 ------------------------------------------------------------------------
 
@@ -22,7 +99,7 @@ boldAttr         = defAttr      `withStyle` bold
 standoutBoldAttr = standoutAttr `withStyle` bold
 
 bar :: Text -> Image
-bar t = text' standoutAttr t <|> charFill standoutAttr ' ' (100 :: Int) 1
+bar t = text' standoutAttr t <|> charFill standoutAttr ' ' (200 :: Int) 1
 
 separator :: Image
 separator = char defAttr ' '
@@ -38,18 +115,6 @@ focused = attributed standoutAttr
 
 boldly :: Text -> Image
 boldly = attributed boldAttr
-
-drawZip :: Zip a -> (a -> Image) -> (a -> Image) -> Int -> Int -> Image
-drawZip z e f w h = vertCat
-  [ drawList e aboveCursor
-  , z^.curr.to f
-  , drawList e (z^.next.to (take (h - length aboveCursor)))
-  ]
-  where
-  aboveCursor = z^.prev.to (drop w)
-
-drawList :: (a -> Image) -> [a] -> Image
-drawList f = vertCat . map f
 
 ------------------------------------------------------------------------
 
@@ -80,12 +145,13 @@ removeHtml (T.uncons -> Just ('&', t)) =
     _                    -> T.empty
   where
   decode :: Text -> Text
-  decode "lt"                            = T.singleton '<'
-  decode "gt"                            = T.singleton '>'
   decode "amp"                           = T.singleton '&'
-  decode "quot"                          = T.singleton '"'
-  decode "ndash"                         = T.singleton '–'
+  decode "gt"                            = T.singleton '>'
+  decode "lt"                            = T.singleton '<'
   decode "mdash"                         = T.singleton '—'
+  decode "nbsp"                          = T.singleton ' '
+  decode "ndash"                         = T.singleton '–'
+  decode "quot"                          = T.singleton '"'
   decode t@(T.unpack -> '#' : 'x' : hex) = fromHex hex t
   decode t@(T.unpack -> '#' : 'X' : hex) = fromHex hex t
   decode (T.unpack   -> '#' : dec)       = T.singleton $ chr $ read dec
@@ -95,13 +161,14 @@ removeHtml (T.uncons -> Just ('&', t)) =
   fromHex s t = case readHex s of
     [(i, "")] -> T.singleton $ chr i
     _         -> '&' `T.cons` t `T.snoc` ';'
-removeHtml (T.uncons -> Just (c, t)) = c `T.cons` removeHtml t
-removeHtml (T.uncons -> _)           = error "Impossible."
+removeHtml (T.uncons -> Just (c, t))   = c `T.cons` removeHtml t
+removeHtml (T.uncons -> _)             = error "Impossible."
 
+-- XXX: Wants to be right aligned, is width needed?
 unread :: AnnFeed -> Text
 unread f = f^.feed.feedItems.to
   (T.pack . (\s -> if s == "0" then "" else "(" ++ s ++ " new)") .
-    show . length . filter ((== False) . _isRead))
+    show . length . filter (not._isRead))
 
 failedImage :: Attr -> AnnFeed -> Image
 failedImage attr f
@@ -138,80 +205,3 @@ focusedItemImage i = horizCat
   attr :: Attr
   attr | i^.isRead = standoutAttr
        | otherwise = standoutBoldAttr
-
-drawModel :: Model -> Image
-drawModel m =
-  let p = m^.vty.position.window
-      w = 50 -- XXX: m^.vty.width - 3...
-      h = m^.vty.height
-  in
-  case m^.browsing of
-
-    TheFeeds fs      -> drawZip fs feedImage focusedFeedImage p h
-
-    TheItems fs is   -> vertCat
-      [ boldly (desc fs^.be "")
-      , separator
-      , drawZip is itemImage focusedItemImage p h
-      ]
-
-    TheText  fs _ i s -> vertCat
-      [ boldly (desc fs^.be "")
-      , separator
-      -- XXX: use width instead of 80 below.
-      , normal (T.center (80 - 1) ' ' (i^.item.itemTitle.be ""))
-      , separator
-      -- XXX: use height when scrolling?
-      -- XXX: replace 50 below with height.
-      , drawList (\t -> char defAttr ' ' <|> normal t) $
-          i^.item.itemDescription.be
-            "(no desc)".to (take 50 . drop s . fmt (min 50 w) . removeHtml)
-      ]
-
-  where
-  desc :: Zip AnnFeed -> Maybe Text
-  desc fs = asumOf both (fs^.curr.feed.feedDescription,
-                        fs^.curr.feed.feedTitle)
-
-------------------------------------------------------------------------
-
-defaultStatus :: String
-defaultStatus = " Press 'h' for help."
-
-debug :: Bool
-debug = False
-
-render ::  (Model, String) -> Image
-render (m, buf) =
-  if debug
-  then
-    separator
-    <->
-    drawList (string defAttr) (lines (show m))
-  else
-    bar " haarss 0.1"
-    <->
-    separator
-    <->
-    paddedBody
-    <->
-    separator
-    <->
-    bar (T.pack (status (m^.downloading) buf))
-    where
-    body       = drawModel m
-    paddedBody = vertCat $ body : replicate emptyRows separator
-      where
-      -- XXX: why is +1 needed here?
-
-      emptyRows :: Int
-      emptyRows = max 0 $ m^.vty.height + 1 - imageHeight body
-    status :: Int -> String -> String
-    status 0  ""  = defaultStatus
-    --- status 0 b    = " Input:" ++ b
-    status n ""   = " Downloading (" ++
-      show n ++ " feed" ++ (if n == 1 then "" else "s") ++ " to go)"
-    status _   _  = "status: bad state"
-
-view :: Vty -> (Model, String) -> IO ()
-view v = update v . picForImage . render

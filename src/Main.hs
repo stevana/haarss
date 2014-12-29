@@ -1,71 +1,23 @@
 {-# LANGUAGE TemplateHaskell, ScopedTypeVariables, RecursiveDo,
              DeriveDataTypeable #-}
 
--- (New headlines), create a new feed with all unread items, where the
--- titles of the items are prefixed by the feed title
---   + should be easy to create, but how do we update isRead for original feeds?
-
--- Scroll long text
-
--- search... see filter example:
---  https://github.com/HeinrichApfelmus/reactive-banana/blob/master/reactive-banana-threepenny/src/CRUD.hs
-
--- Extract content of an article using ML:
---   http://newspaper.readthedocs.org/en/latest/
---   https://github.com/codelucas/newspaper
-
--- Configurable keys? Can we do everything inside Reader? Or just send
--- in a map to setupNetwork?!
-
--- cmdargs package to handle command line stuff? Like what?
-
--- use zipper from control.lens?!
-
-------------------------------------------------------------------------
-
--- Sodium vs banana
-
--- * whenE is better than gate (unlessE)
--- * Sodium needs non-gui examples
--- * (a)syncIO stuff is very good in sodium
--- * snapshot makes more sense than apply.
--- * monad instance rather than union (mappend) and unions (mconcat)
-
--- * network part and pointing out that fromPoll/addHandler are for
---   input and reactimate for output, is very helpful.
-
--- * value is useful, e.g. view model
-
--- * listen a bit unintuitive name? Maybe just me, because i use it to print?
-
--- * consider making a clear distinction between primitive operations
--- and derived operations (separate module with all kinds of useful stuff?)
-
--- * fromPoll in sodium?
-
-------------------------------------------------------------------------
-
 module Main where
 
 import Data.Typeable
 import Data.Monoid
 import qualified Data.ByteString as BS
 import Data.Serialize
-import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
-import Data.Time.Format
 
 import Control.Applicative
-import Control.Lens hiding (view)
+import Control.Lens
 import Control.Exception
 import Control.Monad
 import System.Exit
 import System.Process
-import System.Locale
 
 import qualified Graphics.Vty as Vty
-import Graphics.Vty.Prelude
 
 import FRP.Sodium
 import FRP.Sodium.IO
@@ -73,8 +25,8 @@ import FRP.Sodium.IO
 import Constants
 import Config
 import Model
+import Model.Window
 import View
-import Feed.Feed
 import Feed.Annotated
 import Fetching
 
@@ -118,8 +70,8 @@ main = do
 
   cfg   <- readConfig
   vty   <- Vty.mkVty =<< Vty.standardIOConfig
-  size  <- Vty.displayBounds $ Vty.outputIface vty
-  model <- setHeight (regionHeight size) <$> readSavedModel cfg
+  sz  <- Vty.displayBounds $ Vty.outputIface vty
+  model <- resizeModel sz <$> readSavedModel cfg
 
   (eEvent, pushEvent) <- sync newEvent
   sync $ setupReactive cfg vty model eEvent
@@ -178,14 +130,14 @@ setupReactive config vty iniModel eEvent = do
           isResize (Vty.EvResize _ _) = True
           isResize _                  = False
 
-    let eFeeds :: Event (Text, [AnnFeed])
+    let eFeeds :: Event (UTCTime, [AnnFeed])
         eFeeds = executeAsyncIO $ const io <$> filterE (== UpdateFeeds) eCommand
           where
-          io :: IO (Text, [AnnFeed])
+          io :: IO (UTCTime, [AnnFeed])
           io = do
-            time <- formatTime defaultTimeLocale rfc822DateFormat <$> getCurrentTime
+            time <- getCurrentTime
             fs   <- downloadFeeds (config^.urls) (sync (pushFeedDownloaded ()))
-            return (T.pack time, fs)
+            return (time, fs)
 
     -- XXX: Moving after update feed causes the wrong feed to be
     -- updated. This is currently "fixed" by not allowing any commands
@@ -193,16 +145,19 @@ setupReactive config vty iniModel eEvent = do
 
     -- XXX: Using syncIO instead of asyncIO causes thread blocked on MVar...
     let eFeed :: Event AnnFeed
-        eFeed = executeAsyncIO $ snapshot (\_ model -> io (getFeedUrl model))
-                                          (filterE (== UpdateFeed) eCommand)
-                                          bModel
-          where
-          getFeedUrl :: Model -> String
-          getFeedUrl m = config^.urls^?! ix (m^.browsing.feeds.prev.to length)
+        eFeed = executeAsyncIO $ snapshot
+          (\_ model ->
 
+            -- The getting the feed url for the overview feed will fail,
+            -- in which case we simply return the overview feed.
+            case getFeedUrl config model of
+              Nothing  -> return (model^.browsing.focus.annFeed)
+              Just url -> io url)
+          (filterE (== UpdateFeed) eCommand)
+          bModel
+          where
           io :: String -> IO AnnFeed
           io url = head <$> downloadFeeds [url] (sync (pushFeedDownloaded ()))
-
 
     bModel <- let cmdSem :: Command -> (Model -> Model) -> Event (Model -> Model)
                   cmdSem cmd change = change <$ filterE (== cmd) eCommand
@@ -220,13 +175,10 @@ setupReactive config vty iniModel eEvent = do
                    -- XXX: Resize needs access to IO to get the new size...
                    , cmdSem Resize id
 
-                   , cmdSem ToggleReadStatus $
-                       browsing._TheItems._2.curr.isRead %~ not
+                   -- XXX: This won't work for the overview feed.
+                   , cmdSem ToggleReadStatus toggleReadStatus
 
-                   , cmdSem MarkAllAsRead $ \model ->
-                       if browsingFeeds model
-                       then model & browsing.feeds.traverse.feed.feedItems.traverse.isRead .~ True
-                       else model & browsing._TheItems._2.traverse.isRead .~ True
+                   , cmdSem MarkAllAsRead makeAllAsRead
 
                    , cmdSem UpdateFeed $ \model ->
                        model & downloading .~ 1
@@ -236,14 +188,12 @@ setupReactive config vty iniModel eEvent = do
 
                    , cmdSem Search $ search $ T.pack "agda" -- XXX
 
-                   , (\f model ->
-                       model & browsing.feeds.curr %~ flip Feed.Annotated.merge f)
-                         <$> eFeed
+                     -- XXX: Get the time as well?
+                     -- XXX: Can we derive this from feedsDownload?
+                   , feedDownloaded <$> eFeed
 
                    -- XXX: this loses the current position (maybe not bad?)
-                   , (\(date, fs) model -> model & browsing.feeds .~ makeZip
-                         (addOverviewFeed date (mergeFeeds
-                           (closeZip (model^.browsing.feeds)) fs))) <$> eFeeds
+                   , feedsDownloaded <$> eFeeds
 
                    , (\model -> model & downloading %~ pred) <$ eFeedDownloaded
                    ]
@@ -261,7 +211,7 @@ setupReactive config vty iniModel eEvent = do
                    { std_err = CreatePipe }
             return ()
 
-  _ <- listen (value bModel) (\model -> view vty (model, ""))
+  _ <- listen (value bModel) (viewModel vty)
   _ <- listen eOpenUrl       id
 
   return ()

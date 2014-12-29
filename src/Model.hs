@@ -1,281 +1,186 @@
-{-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveFoldable,
-             DeriveTraversable, RecordWildCards, StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveTraversable,
+             DeriveFoldable, OverloadedStrings #-}
 
 module Model where
 
-import Control.Applicative
-import Control.Lens
-import Data.Foldable (Foldable)
-import Data.Serialize
-import Test.QuickCheck as QC
-import System.Locale
+import Prelude hiding (foldr, foldl)
 
-import Constants
-import Config
-import Feed.Feed
-import Feed.Annotated
+import Control.Applicative
+import Control.Monad
+import Control.Lens hiding (below)
+import Data.Foldable
+import Data.Bitraversable
+import qualified Data.Sequence as Seq
+import Data.Serialize
+import Data.Text (Text)
+import qualified Data.Text as T
+import Test.QuickCheck hiding (resize)
 
 -- XXX:
 import qualified Data.ByteString as BS
-import Data.Text (Text)
-import qualified Data.Text as T
-import System.Directory (doesFileExist)
 import Data.Time
+import System.Directory
+import System.Locale
+import Graphics.Vty.Prelude
 
-----------------------------------------------------------------------
-
-data Zip a = Zip
-  { _prev :: [a]
-  , _curr :: a
-  , _next :: [a]
-  }
-  deriving (Eq, Functor, Foldable, Traversable)
-
-makeLenses ''Zip
-
-data Dir = Up | Down | In | Out | Top | Bot
-  deriving (Show, Eq, Enum)
-
-makeZip :: [a] -> Zip a
-makeZip []       = error "makeZip: empty"
-makeZip (x : xs) = Zip [] x xs
-
-closeZip :: Zip a -> [a]
-closeZip (Zip xs z ys) = xs ++ z : ys
-
-moveZip :: Dir -> Zip a -> Zip a
-moveZip Up   z@(Zip [] _ _)      = z
-moveZip Up   (Zip xs c ys)       = Zip (take (length xs - 1) xs) (last xs) (c : ys)
-moveZip Down (Zip xs c (y : ys)) = Zip (xs ++ [c]) y ys
-moveZip Top  z@(Zip xs c ys)     = case xs of
-                                     []      -> z
-                                     x : xs' -> Zip [] x (xs' ++ c : ys)
-moveZip Bot  z@(Zip xs c ys)     = case ys of
-                                     []    -> z
-                                     _ : _ -> Zip (xs ++ c : take (length ys - 1) ys)
-                                                  (last ys) []
-moveZip _    z                   = z
+import Config
+import Constants
+import Feed.Feed
+import Feed.Annotated
+import Model.Window
 
 ------------------------------------------------------------------------
-
-instance Arbitrary Dir where
-  arbitrary = QC.elements (enumFrom Up)
-
-prop_makeMoveClose :: NonEmptyList Int -> [Dir] -> Bool
-prop_makeMoveClose (NonEmpty xs) dirs =
-  closeZip (apply moves (makeZip xs)) == xs
-  where
-  moves :: [Zip a -> Zip a]
-  moves = map moveZip dirs
-
-apply :: [a -> a] -> a -> a
-apply fs x = foldl (\ih f -> f ih) x fs
-
-------------------------------------------------------------------------
-
-type Scroll = Int
-
-data Browsing
-  = TheFeeds (Zip AnnFeed)
-  | TheItems (Zip AnnFeed) (Zip AnnItem)
-  | TheText  (Zip AnnFeed) (Zip AnnItem) AnnItem Scroll
-
-makePrisms ''Browsing
-
-feeds :: Lens' Browsing (Zip AnnFeed)
-feeds k (TheFeeds fs)       = TheFeeds <$> k fs
-feeds k (TheItems fs is)    = (\fs' -> TheItems fs' is)    <$> k fs
-feeds k (TheText fs is i s) = (\fs' -> TheText fs' is i s) <$> k fs
-
-move' :: Dir -> (Browsing -> Browsing)
-move' In  b@(TheFeeds fs)     = if null is
-                                   then b
-                                   else TheItems fs (makeZip is)
-  where
-  is = fs^.curr.feed.feedItems
-move' Out b@(TheFeeds _)      = b
-move' dir (TheFeeds fs)       = TheFeeds (moveZip dir fs)
-move' In  (TheItems fs is)    = TheText fs (is & curr.isRead .~ True)
-                                           (is^.curr) 0
-move' Out (TheItems fs is)    = TheFeeds (fs & curr.feed.feedItems .~
-                                           closeZip is)
-move' dir (TheItems fs is)    = TheItems fs (moveZip dir is)
-move' In  (TheText fs is _ _) = TheItems fs is
-move' Out (TheText fs is _ _) = TheItems fs is
-move' dir (TheText fs is _ _) = TheText fs (is' & curr.isRead .~ True)
-                                           (is'^.curr) 0
-  where
-  is' = moveZip dir is
-
-type Height = Int
-
-data VtyStuff
-  = ForFeeds Position Height
-  | ForItems Position Position Height
-  | ForText  Position Position Height
-
-initialVtyStuff :: VtyStuff
-initialVtyStuff = ForFeeds (Position 0 0) 0
-
-height :: Lens' VtyStuff Height
-height k (ForFeeds p h)   = ForFeeds p   <$> k h
-height k (ForItems p q h) = ForItems p q <$> k h
-height k (ForText p q h)  = ForText p q  <$> k h
-
-position :: Lens' VtyStuff Position
-position k (ForFeeds p h)   = (\p' -> ForFeeds p' h)   <$> k p
-position k (ForItems p q h) = (\q' -> ForItems p q' h) <$> k q
-position k (ForText p q h)  = (\q' -> ForText p q' h)  <$> k q
+-- * Datatypes
 
 data Model = Model
-  { _browsing    :: Browsing
+  { _browsing    :: Browse
   , _downloading :: Int
-  , _vty         :: VtyStuff
   }
+  deriving Eq
 
-data Position = Position
-  { _window :: Int
-  , _cursor :: Int
-  }
+type Browse = Window' AnnFeed Focus
 
-makeLenses ''Position
+data Focus
+  = TheFeed
+      { _annFeed  :: AnnFeed
+      }
+  | TheItems
+      { _annFeed  :: AnnFeed
+      , _annItems :: Window AnnItem
+      }
+  | TheText
+      { _annFeed  :: AnnFeed
+      , _annItems :: Window AnnItem
+      , _annItem  :: AnnItem
+      , _scroll   :: Int
+      }
+  deriving Eq
+
 makeLenses ''Model
+makeLenses ''Focus
+makePrisms ''Focus
 
-browsingFeeds :: Model -> Bool
-browsingFeeds m = m^.browsing & has _TheFeeds
-
-moveVty :: Dir -> Int -> (VtyStuff -> VtyStuff)
-moveVty Top _    v = v & position.cursor .~ 0
-                       & position.window .~ 0
-moveVty Bot tot  v = v & position.cursor .~ min tot (v^.height)
-                       & position.window .~ max 0 (tot - v^.height)
-moveVty Up _     v
-  | v^.position.cursor == 0         = v & position.window %~ max 0 . pred
-  | otherwise                       = v & position.cursor -~ 1
-moveVty Down tot v
-  | v^.position.cursor == tot       = v
-  | v^.position.cursor == v^.height = v & position.window %~
-      if v^.position.window + v^.height < tot
-         then succ
-         else id
-  | otherwise                       = v & position.cursor +~ 1
-moveVty In  _ (ForFeeds p h)        = ForItems p (Position 0 0) h
-moveVty Out _ v@(ForFeeds _ _)      = v
-moveVty In  _ (ForItems p q h)      = ForText p q h
-moveVty Out _ (ForItems p _ h)      = ForFeeds p h
-moveVty In  _ (ForText p q h)       = ForItems p q h
-moveVty Out _ (ForText p q h)       = ForItems p q h
-
-move :: Dir -> (Model -> Model)
-move dir m = m' & vty %~ moveVty dir (m'^.browsing.to total)
+feeds :: Lens' Model (Window AnnFeed)
+feeds = lens g s
   where
-  m' = m & browsing %~ move' dir
+  g :: Model -> Window AnnFeed
+  g m = m^.browsing & mapped %~ _annFeed
 
-  -- This is really total-1.
-  total :: Browsing -> Int
-  total = max 0 . pred . length . closeZip . things
-    where
-    things :: Browsing -> Zip (Either AnnFeed AnnItem)
-    things (TheFeeds fs)      = fmap Left fs
-    things (TheItems _ is)    = fmap Right is
-    things (TheText _ is _ _) = fmap Right is
+  s :: Model -> Window AnnFeed -> Model
+  s m w = m & browsing.above         .~ w^.above
+            & browsing.prev          .~ w^.prev
+            & browsing.focus.annFeed .~ w^.focus
+            & browsing.next          .~ w^.next
+            & browsing.below         .~ w^.below
 
--- XXX: Does this work?!
-lthings :: Lens' Browsing (Zip (Either AnnFeed AnnItem))
-lthings k (TheFeeds fs) = TheFeeds <$> fmap (either id undefined)
-                                   <$> k (fmap Left fs)
-lthings k (TheItems fs is) =
-  (\is' -> TheItems fs is') <$> fmap (either undefined id)
-                            <$> k (fmap Right is)
-lthings k (TheText fs is i s) =
-  (\is' -> TheText fs is' i s) <$> fmap (either undefined id)
-                               <$> k (fmap Right is)
+prop_feedsSetView :: Model -> Window AnnFeed -> Bool
+prop_feedsSetView m w = w == (m & feeds .~ w)^.feeds
 
-------------------------------------------------------------------------
+prop_feedsViewSet :: Model -> Bool
+prop_feedsViewSet m = m == (m & feeds .~ m^.feeds)
 
-getItemUrl :: Model -> Maybe Text
-getItemUrl m =
-  m^.browsing._TheItems._2.link <|>
-  m^.browsing._TheText._2.link
+prop_feedsSetSet :: Model -> Window AnnFeed -> Window AnnFeed -> Bool
+prop_feedsSetSet m w1 w2 =
+  ((m & feeds .~ w1) & feeds .~ w2) == (m & feeds .~ w2)
+
+items :: Lens' Model (Window AnnItem)
+items = lens g s
   where
-  link = curr.item.itemLink
-{-
-getItemUrl m = case m^.browsing of
-  TheFeeds _       -> Nothing
-  TheItems _ is    -> is^.curr.item.itemLink.to (Just . T.unpack)
-  TheText  _ _ i _ -> i^.item.itemLink. to (Just . T.unpack)
--}
+  g :: Model -> Window AnnItem
+  g m = case m^.browsing.focus of
+    TheFeed  f        -> f^.feed.feedItems.to (makeWindow (m^.feeds.to size))
+    TheItems _ is     -> is
+    TheText  _ is _ _ -> is
 
-search :: Text -> Model -> Model
-search t m = case m^.browsing of
-  TheFeeds fs    -> case searchZip (matchFeed t) fs 0 of
-    Nothing       -> m
-    Just (fs', d) -> let total = length (closeZip fs) - 1
-                     in m & browsing .~ TheFeeds fs'
-                          & vty %~ \v -> iterate (moveVty Down total) v !! d
-  TheItems fs is -> case searchZip (matchItem t) is 0 of
-    Nothing       -> m
-    Just (is', d) -> let total = length (closeZip is) - 1
-                     in m & browsing .~ TheItems fs is'
-                          & vty %~ \v -> iterate (moveVty Down total) v !! d
-  TheText {..}   -> m
-  where
-  matchFeed :: Text -> AnnFeed -> Bool
-  matchFeed t' f = t' `matchText` (f^.feed.feedTitle)
+  s :: Model -> Window AnnItem -> Model
+  s m w = case m^.browsing.focus of
+    TheFeed  f        -> m & browsing.focus .~ TheFeed (f & feed.feedItems .~
+                                                              closeWindow w)
+    TheItems f _      -> m & browsing.focus .~ TheItems f w
+    TheText  f _ i j  -> m & browsing.focus .~ TheText  f w i j
 
-  matchItem :: Text -> AnnItem -> Bool
-  matchItem t' i = t' `matchText` (i^.item.itemTitle)
+-- Note that this is only true modulo not caring about the size.
+prop_itemsSetView :: Model -> Window AnnItem -> Bool
+prop_itemsSetView m w = closeWindow w == (m & items .~ w)^.items.to closeWindow
 
-  matchText :: Text -> Maybe Text -> Bool
-  matchText _  Nothing    = False
-  matchText t' (Just t'') = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
+prop_itemsViewSet :: Model -> Bool
+prop_itemsViewSet m = m == (m & items .~ m^.items)
 
-searchZip :: (a -> Bool) -> Zip a -> Int -> Maybe (Zip a, Int)
-searchZip f z d | z^.next.to null = Nothing
-                | z^.curr.to f    = Just (z, d)
-                | otherwise       = searchZip f (moveZip Down z) (d + 1)
-
-------------------------------------------------------------------------
+prop_itemsSetSet :: Model -> Window AnnItem -> Window AnnItem -> Bool
+prop_itemsSetSet m w1 w2 =
+  ((m & items .~ w1) & items .~ w2) == (m & items .~ w2)
 
 instance Show Model where
-  show m = unlines
-    [ "Browsing: " ++ m^.browsing.to show
+  show m | browsingFeeds m = unlines
+    [ "Browsing feeds."
     , ""
-    , "VtyStuff: " ++ m^.vty.to show
+    , m^.feeds.to show
+    , ""
+    , "Size   of feeds window: " ++ m^.feeds.to (show . size)
+    , "Length of feeds window: " ++
+        m^.feeds.to (show . length . closeWindow)
     , ""
     , "Downloading: " ++ m^.downloading.to show
     ]
+  show m | browsingItems m = unlines
+    [ "Browsing items."
+    , ""
+    , m^.items.to show
+    , ""
+    , "Size   of items window: " ++ m^.items.to (show . size)
+    , "Length of items window: " ++
+        m^.items.to (show . length . closeWindow)
+    ]
+  show m | otherwise       = unlines
+    [ "Browsing the text."
+    , ""
+    , m^.browsing.focus.annItem.item.itemDescription
+        .be "(no desc)".to T.unpack
+    , ""
+    , "Scroll: " ++ m^.browsing.focus.scroll.to show
+    ]
 
-instance Show Browsing where
-  show (TheFeeds fs)     = "TheFeeds." ++ show fs
-  show (TheItems _ is)   = "TheItems." ++ show is
+instance Show Focus where
+  show (TheFeed f)       = show f
+  show (TheItems _ is)   = show is
   show (TheText _ _ i s) = unlines
     [ "TheText: " ++ i^.item.itemDescription.to show
     , ""
     , "Scroll: " ++ show s
     ]
 
-indent :: [String] -> [String]
-indent = (:) "\n" . map ("  " ++)
+instance Arbitrary Model where
+  arbitrary = liftM2 Model arbitrary arbitrary
 
-instance Show a => Show (Zip a) where
-  show z = unlines $ indent
-    [ "prev: " ++ z^.prev.to show
-    , "curr: " ++ z^.curr.to show
-    , "next: " ++ z^.next.to show
+instance Arbitrary Focus where
+  arbitrary = oneof
+    [ liftM  TheFeed  arbitrary
+    , liftM2 TheItems arbitrary arbitrary
+    , liftM4 TheText  arbitrary arbitrary arbitrary arbitrary
     ]
 
-instance Show VtyStuff where
-  show v = unlines $ indent
-    [ "window: " ++ v^.position.window.to show
-    , "cursor: " ++ v^.position.cursor.to show
-    , "height: " ++ v^.height.to show
-    ]
+instance Serialize Model where
+  put m = put $ m^.browsing.to (closeWindow' _annFeed)
+  get   = makeModel <$> get
+
+prop_serialisation :: NonEmptyList AnnFeed -> [Dir] -> Bool
+prop_serialisation (NonEmpty fs) dirs =
+  m'^.browsing.to (closeWindow' _annFeed) ==
+  m ^.browsing.to (closeWindow' _annFeed)
+  where
+  moves :: [Model -> Model]
+  moves = map move $ dirs ++ [Out, Out, Out]
+
+  m :: Model
+  m = foldl (\ih f -> f ih) (makeModel fs) moves
+
+  m' :: Model
+  m' = decode (encode m)^?!_Right
 
 ------------------------------------------------------------------------
 
 makeModel :: [AnnFeed] -> Model
-makeModel fs = Model (TheFeeds (makeZip fs)) 0 initialVtyStuff
+makeModel fs = Model (fmap TheFeed (makeWindow 20 fs)) 0
 
 initialModel :: UTCTime -> Config -> Model
 initialModel time cfg = makeModel (addOverviewFeed time fs)
@@ -288,15 +193,115 @@ initialModel time cfg = makeModel (addOverviewFeed time fs)
            & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
                                  rfc822DateFormat time)
 
+-- XXX: The magic -5...
+resizeModel :: DisplayRegion -> Model -> Model
+resizeModel sz m = m & feeds %~ resize (regionHeight sz - 5)
 
--- XXX: Better name?
-setHeight :: Int -> Model -> Model
-setHeight h m = m & vty.height .~ h
+------------------------------------------------------------------------
+-- * Movement
+
+data Dir = Up | Down | In | Out | Top | Bot
+  deriving (Show, Eq, Enum)
+
+instance Arbitrary Dir where
+  arbitrary = Test.QuickCheck.elements [Up, Down, In , Out, Top, Bot]
+
+moveWin :: Dir -> Window a -> Window a
+moveWin Up   = up
+moveWin Down = down
+moveWin Top  = top
+moveWin Bot  = bot
+moveWin _    = id
+
+moveWin' :: Dir -> (a -> b) -> (b -> a) -> Window' a b -> Window' a b
+moveWin' d f g = fmap f . moveWin d . fmap g
+
+moveBrowse :: Dir -> Browse -> Browse
+moveBrowse d fz = case fz^.focus of
+
+  TheFeed  f      -> case d of
+    In  -> let is = f^.feed.feedItems
+           in if not (null is)
+              then fz & focus .~ TheItems f (makeWindow (size fz - 2) is)
+              else fz
+    Out -> fz
+    _   -> moveWin' d TheFeed _annFeed fz
+
+  TheItems f iz   -> case d of
+    In  -> fz & focus .~ TheText  f iz (iz^.focus) 0
+    Out -> fz & focus .~ TheFeed (f & feed.feedItems .~ closeWindow iz)
+    _   -> fz & focus .~ TheItems f (moveWin d iz)
+
+  TheText  f iz i s -> case d of
+    In  -> fz & focus .~ TheItems f iz
+    Out -> fz & focus .~ TheItems f iz
+    _   -> fz & focus .~ TheText  f (moveWin d iz) i s
+
+move :: Dir -> (Model -> Model)
+move d m = m & browsing %~ moveBrowse d
+
+------------------------------------------------------------------------
+
+browsingFeeds :: Model -> Bool
+browsingFeeds m = m^.browsing.focus & has _TheFeed
+
+browsingItems :: Model -> Bool
+browsingItems m = m^.browsing.focus & has _TheItems
+
+getFeedUrl :: Config -> Model -> Maybe String
+getFeedUrl cfg m = cfg^.urls^? ix (i - 1)
+  where
+  i = m^.browsing.prev.to  Seq.length +
+      m^.browsing.above.to Seq.length
+
+getItemUrl :: Model -> Maybe Text
+getItemUrl m = m^.browsing.focus.annItems.focus.item.itemTitle
+
+------------------------------------------------------------------------
+
+-- XXX: This won't work for the overview feed.
+toggleReadStatus :: Model -> Model
+toggleReadStatus m = m & browsing.focus.annItems.focus.isRead %~ not
+
+-- XXX: Magic string...
+makeAllAsRead :: Model -> Model
+makeAllAsRead m
+  | browsingFeeds m ||
+    m^.feeds.focus.feed.feedTitle == Just "(New headlines)"
+  = m & feeds.both.feed.feedItems.traverse.isRead .~ True
+
+  | otherwise = m & feeds.bitraverse pure.feed.feedItems.traverse.isRead .~ True
+
+feedDownloaded :: AnnFeed -> Model -> Model
+feedDownloaded f m = m & browsing.focus.annFeed %~ Feed.Annotated.merge f
+                       & downloading            .~ 0
+
+feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
+feedsDownloaded (time, fs) m =
+  m & feeds .~ makeWindow (m^.feeds.to size)
+                 (addOverviewFeed time (mergeFeeds
+                   (m^.feeds.to (drop 1 . closeWindow))
+                   fs))
+
+search :: Text -> Model -> Model
+search t m | browsingFeeds m = m & feeds %~ findFirst (matchFeed t)
+           | browsingItems m = m & items %~ findFirst (matchItem t)
+           | otherwise       = m
+  where
+  matchFeed :: Text -> AnnFeed -> Bool
+  matchFeed t' f = t' `matchText` (f^.feed.feedTitle)
+
+  matchItem :: Text -> AnnItem -> Bool
+  matchItem t' i = t' `matchText` (i^.item.itemTitle)
+
+  matchText :: Text -> Maybe Text -> Bool
+  matchText _  Nothing    = False
+  matchText t' (Just t'') = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
 
 ------------------------------------------------------------------------
 
 -- XXX: Move to Model.Serialise, add writeModel
-
+-- XXX: Use: getAppUserDataDirectory
 readSavedModel :: Config -> IO Model
 readSavedModel cfg = do
   modelPath <- getModelPath
@@ -310,22 +315,3 @@ readSavedModel cfg = do
       case em of
         Left _  -> error $ "readSavedModel: failed to restore saved model."
         Right m -> return m
-
-------------------------------------------------------------------------
-
-instance Serialize Model where
-  put m = put $ m^.browsing._TheFeeds.to closeZip
-  get   = makeModel <$> get
-
-prop_serialisation :: NonEmptyList AnnFeed -> [Dir] -> Bool
-prop_serialisation (NonEmpty fs) dirs =
-  m'^?browsing._TheFeeds.to closeZip == m^?browsing._TheFeeds.to closeZip
-  where
-  moves :: [Model -> Model]
-  moves = map move $ dirs ++ [Out, Out, Out]
-
-  m :: Model
-  m = apply moves $ makeModel fs
-
-  m' :: Model
-  m' = decode (encode m)^?!_Right
