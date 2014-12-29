@@ -253,7 +253,7 @@ getFeedUrl cfg m = cfg^.urls^? ix (i - 1)
       m^.browsing.above.to Seq.length
 
 getItemUrl :: Model -> Maybe Text
-getItemUrl m = m^.browsing.focus.annItems.focus.item.itemTitle
+getItemUrl m = m^.browsing.focus.annItems.focus.item.itemLink
 
 ------------------------------------------------------------------------
 
