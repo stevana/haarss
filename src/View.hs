@@ -60,14 +60,14 @@ drawModel m h = case m^.browsing.focus of
     , drawWin is itemImage focusedItemImage
     ]
 
-  TheText  f _ i s -> vertCat
+  TheText  f is s -> vertCat
     [ boldly (desc f^.be "")
     , separator
-    , normal (T.center (w - 1) ' ' (i^.item.itemTitle.be ""))
+    , normal (T.center (w - 1) ' ' (is^.focus.item.itemTitle.be ""))
     , separator
     , drawList (\t -> char defAttr ' ' <|> normal t) $
-        i^.item.itemDescription.be
-          "(no desc)".to (take h . drop s . fmt (min 60 w) . removeHtml)
+        is^.focus.item.itemDescription.be
+         "(no desc)".to (take h . drop s . fmt (min 60 w) . removeHtml)
     ]
 
   where
