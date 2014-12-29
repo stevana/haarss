@@ -28,7 +28,7 @@ flag old-locale
   description: If false then depend on time >= 1.5.
                .
                If true then depend on time < 1.5 together with old-locale.
-  default: False
+  default: True
 
 executable haarss
   hs-source-dirs: src

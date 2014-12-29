@@ -7,7 +7,7 @@ ghc:
 
 install:
   - cabal install cabal-install
-  - cabal install --only-dependencies --force-reinstalls
+  - cabal install --only-dependencies
 
 script:
   - cabal configure
