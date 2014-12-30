@@ -11,13 +11,11 @@ data Op = Move | Fetch
 
 data Dir = Up | Down
 
-data family   Cmd (o :: Op)
-data instance Cmd (o :: Op) where
+data Cmd (o :: Op) where
   MoveP  :: Dir -> Cmd Move
   FetchP :: Cmd Fetch
 
-data family   Resp (o :: Op)
-data instance Resp (o :: Op) where
+data Resp (o :: Op) where
   MoveA  :: Resp Move
   FetchA :: String -> Resp Fetch
 
