@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 
 import FRP.Sodium
@@ -11,11 +10,11 @@ data Op = Move | Fetch
 
 data Dir = Up | Down
 
-data Cmd (o :: Op) where
+data Cmd :: Op -> * where
   MoveP  :: Dir -> Cmd Move
   FetchP :: Cmd Fetch
 
-data Resp (o :: Op) where
+data Resp :: Op -> * where
   MoveA  :: Resp Move
   FetchA :: String -> Resp Fetch
 
