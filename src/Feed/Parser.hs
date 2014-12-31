@@ -5,8 +5,7 @@ module Feed.Parser (parseFeed) where
 import Control.Exception        (SomeException)
 import Data.ByteString.Lazy     (ByteString)
 import Data.Text                (strip)
-import Data.Text.Encoding.Error (lenientDecode)
-import Data.Text.Lazy.Encoding  (decodeUtf8With)
+import Data.Text.Lazy.Encoding  (decodeUtf8', decodeLatin1)
 import Text.XML                 (parseText, def)
 import Text.XML.Lens
 
@@ -16,7 +15,9 @@ import Feed.Feed
 
 parseFeed :: ByteString -> Either SomeException Feed
 parseFeed bs = do
-  doc <- parseText def (decodeUtf8With lenientDecode bs)
+  -- Try decoding as UTF8 first, fall back on Latin1 if it fails.
+  let t = either (const (decodeLatin1 bs)) id (decodeUtf8' bs)
+  doc <- parseText def t
   fromXML doc
 
 fromXML :: Document -> Either SomeException Feed
