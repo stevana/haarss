@@ -31,7 +31,7 @@ instance Show FailureReason where
     = "Status code: " ++ show (statusCode s) ++ "."
   show (DownloadFailure _)
     = "Unknown download failure."
-  show (ParseFailure _) = "Parse failure."
+  show (ParseFailure e) = "Parse failure (" ++ e ++ ")"
   show TimeoutFailure   = "Timeout failure."
   show UnknownFailure   = "Unknown failure."
 

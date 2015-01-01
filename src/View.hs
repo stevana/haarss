@@ -6,10 +6,11 @@ import Control.Lens
 import Data.Char (chr)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Foldable
+import Data.Foldable (toList)
 import Data.Sequence (Seq)
 import Graphics.Vty hiding (resize)
 import Graphics.Vty.Prelude
+import Network.HTTP.Types.Status
 import Numeric (readHex)
 
 import Feed.Feed
@@ -37,7 +38,7 @@ render ::  Model -> DisplayRegion -> Image
 render m sz = vertCat
   [ bar " haarss 0.1"
   , separator
-  , resizeHeight (regionHeight sz - 5) (drawModel m (regionHeight sz))
+  , resizeHeight (regionHeight sz - 5) (drawModel m sz)
   , separator
   , bar (T.pack (status (m^.downloading)))
   , separator
@@ -48,30 +49,32 @@ render m sz = vertCat
   status n = " Downloading (" ++ show n ++ " feed" ++
                (if n == 1 then "" else "s") ++ " to go)"
 
-drawModel :: Model -> Int -> Image
-drawModel m h = case m^.browsing.focus of
+drawModel :: Model -> DisplayRegion -> Image
+drawModel m (w, h) = case m^.browsing.focus of
 
   TheFeed _         -> drawWin (m^.feeds)
-                               feedImage focusedFeedImage
+                               (feedImage w defAttr)
+                               (feedImage w standoutAttr)
 
   TheItems f is     -> vertCat
-    [ boldly (desc f^.be "")
+    [ attributed boldAttr (desc f^.be "")
     , separator
-    , drawWin is itemImage focusedItemImage
+    , drawWin is (itemImage defAttr boldAttr h)
+                 (itemImage standoutAttr standoutBoldAttr h)
     ]
 
   TheText  f is s -> vertCat
-    [ boldly (desc f^.be "")
+    [ attributed boldAttr (desc f^.be "")
     , separator
-    , normal (T.center (w - 1) ' ' (is^.focus.item.itemTitle.be ""))
+    , attributed defAttr
+        (T.center (w - 1) ' ' (is^.focus.item.itemTitle.be ""))
     , separator
-    , drawList (\t -> char defAttr ' ' <|> normal t) $
+    , drawList (\t -> char defAttr ' ' <|> attributed defAttr t) $
         is^.focus.item.itemDescription.be
          "(no desc)".to (take h . drop s . fmt (min 60 w) . removeHtml)
     ]
 
   where
-  w = 72
   desc :: AnnFeed -> Maybe Text
   desc f = asumOf both (f^.feed.feedDescription,
                         f^.feed.feedTitle)
@@ -91,6 +94,54 @@ drawSeq f = vertCat . toList . fmap f
 drawList :: (a -> Image) -> [a] -> Image
 drawList f = vertCat . map f
 
+failedImage :: Attr -> AnnFeed -> Image
+failedImage attr f = char attr $ case f^.history of
+  []                                                       -> ' '
+  Success _                                            : _ -> ' '
+  Failure _ (DownloadFailure (StatusCodeException' s)) : _
+    | s == movedPermanently301                             -> '☈'
+    | s == notModified304                                  -> ' '
+    | s == notFound404                                     -> '✗'
+    | s == forbidden403                                    -> '✋'
+    | s == requestTimeout408                               -> '⌚'
+    | s == internalServerError500                          -> '⚠'
+    | otherwise                                            -> '⚡'
+  Failure _ (DownloadFailure OtherException)           : _ -> '¿'
+  Failure _ (ParseFailure _)                           : _ -> '✂'
+  Failure _ TimeoutFailure                             : _ -> '⌛'
+  hs | length hs == 10 && all isFailure hs                 -> '☠'
+  Failure _ UnknownFailure                             : _ -> '?'
+  where
+  isFailure (Failure _ _) = True
+  isFailure _             = False
+
+feedImage :: Int -> Attr -> AnnFeed -> Image
+feedImage w attr f = horizCat
+  [ failedImage attr f
+  , text' attr title
+  , charFill attr ' ' (w - T.length title - T.length unread - 3) 1
+  , attributed attr unread
+  , charFill attr ' ' (1 :: Int) 1
+  ]
+  where
+  title :: Text
+  title = f^.feed.feedTitle.be "no title"
+
+  unread :: Text
+  unread = f^.feed.feedItems.to
+    (T.pack . (\s -> if s == "0" then "" else s ++ " new") .
+      show . length . filter (not._isRead))
+
+itemImage :: Attr -> Attr -> Int -> AnnItem -> Image
+itemImage r n h i = horizCat
+  [ attributed attr (i^.item.itemTitle.be "no title")
+  , charFill r ' '  h 1
+  ]
+  where
+  attr :: Attr
+  attr | i^.isRead = r
+       | otherwise = n
+
 ------------------------------------------------------------------------
 
 standoutAttr, boldAttr, standoutBoldAttr :: Attr
@@ -106,15 +157,6 @@ separator = char defAttr ' '
 
 attributed :: Attr -> Text -> Image
 attributed attr t = char attr ' ' <|> text' attr t
-
-normal :: Text -> Image
-normal = attributed defAttr
-
-focused :: Text -> Image
-focused = attributed standoutAttr
-
-boldly :: Text -> Image
-boldly = attributed boldAttr
 
 ------------------------------------------------------------------------
 
@@ -163,45 +205,3 @@ removeHtml (T.uncons -> Just ('&', t)) =
     _         -> '&' `T.cons` t `T.snoc` ';'
 removeHtml (T.uncons -> Just (c, t))   = c `T.cons` removeHtml t
 removeHtml (T.uncons -> _)             = error "Impossible."
-
--- XXX: Wants to be right aligned, is width needed?
-unread :: AnnFeed -> Text
-unread f = f^.feed.feedItems.to
-  (T.pack . (\s -> if s == "0" then "" else "(" ++ s ++ " new)") .
-    show . length . filter (not._isRead))
-
-failedImage :: Attr -> AnnFeed -> Image
-failedImage attr f
-  | f^.history.to failed = char attr '!'
-  | otherwise            = char attr ' '
-
-feedImage :: AnnFeed -> Image
-feedImage f = horizCat
-  [ failedImage defAttr f
-  , text' defAttr $ f^.feed.feedTitle.be "no title"
-  , normal $ unread f
-  ]
-
-focusedFeedImage :: AnnFeed -> Image
-focusedFeedImage f = horizCat
-  [ failedImage standoutAttr f
-  , text' standoutAttr $ f^.feed.feedTitle.be "no title"
-  , focused $ unread f
-  ]
-
-itemImage :: AnnItem -> Image
-itemImage i = attributed attr (i^.item.itemTitle.be "no title")
-  where
-  attr :: Attr
-  attr | i^.isRead = defAttr
-       | otherwise = boldAttr
-
-focusedItemImage :: AnnItem -> Image
-focusedItemImage i = horizCat
-  [ attributed attr $ i^.item.itemTitle.be "no title"
-  , charFill standoutAttr ' ' (100 :: Int) 1
-  ]
-  where
-  attr :: Attr
-  attr | i^.isRead = standoutAttr
-       | otherwise = standoutBoldAttr
