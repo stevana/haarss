@@ -4,7 +4,8 @@ module Feed.Parser (parseFeed) where
 
 import Control.Exception        (SomeException)
 import Data.ByteString.Lazy     (ByteString)
-import Data.Text                (strip)
+import Data.Text                (Text)
+import Data.Text as T           (strip, lines)
 import Data.Text.Lazy.Encoding  (decodeUtf8', decodeLatin1)
 import Text.XML                 (parseText, def)
 import Text.XML.Lens
@@ -27,6 +28,9 @@ fromXML doc = case doc^.root.localName of
   "feed" -> return $ fromAtom doc
   _      -> fail   $ error "fromXML: unknown feed kind."
 
+process :: Text -> Text
+process = T.strip . head . T.lines
+
 fromRSS1 :: Document -> Feed
 fromRSS1 doc = newEmptyFeed RSS1Kind
   & feedTitle       .~ doc^?root./ell "channel"./ell "title".text
@@ -38,7 +42,7 @@ fromRSS1 doc = newEmptyFeed RSS1Kind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ strip)
+    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
     & itemLink        .~ e^?entire.ell "link".text
     & itemDate        .~ Nothing
     & itemFeedLink    .~ Nothing
@@ -56,7 +60,7 @@ fromRSS2 doc = newEmptyFeed RSS2Kind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ (e^?entire.el "title".text & mapped %~ strip)
+    & itemTitle       .~ (e^?entire.el "title".text & mapped %~ process)
     & itemLink        .~ e^?entire.el "link".text
     & itemDate        .~ e^?entire.el "pubDate".text
     & itemFeedLink    .~ Nothing
@@ -73,7 +77,7 @@ fromAtom doc = newEmptyFeed AtomKind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ strip)
+    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
     & itemLink        .~ e^?entire.ell "link".attr "href"
     & itemDate        .~ e^?entire.ell "published".text
     & itemFeedLink    .~ Nothing
