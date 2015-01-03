@@ -26,6 +26,7 @@ import Config
 import Constants
 import Feed.Feed
 import Feed.Annotated
+import Interface
 import Model.Window
 
 ------------------------------------------------------------------------
@@ -198,9 +199,6 @@ resizeModel sz m = m & feeds %~ resize (regionHeight sz - 5)
 ------------------------------------------------------------------------
 -- * Movement
 
-data Dir = Up | Down | In | Out | Top | Bot
-  deriving (Show, Eq, Enum)
-
 instance Arbitrary Dir where
   arbitrary = Test.QuickCheck.elements [Up, Down, In , Out, Top, Bot]
 
@@ -258,12 +256,12 @@ getItemUrl m = m^.browsing.focus.annItems.focus.item.itemLink
 ------------------------------------------------------------------------
 
 -- XXX: This won't work for the overview feed.
-toggleReadStatus :: Model -> Model
-toggleReadStatus m = m & browsing.focus.annItems.focus.isRead %~ not
+markAsRead :: Model -> Model
+markAsRead m = m & browsing.focus.annItems.focus.isRead %~ not
 
 -- XXX: Magic string...
-makeAllAsRead :: Model -> Model
-makeAllAsRead m
+markAllAsRead :: Model -> Model
+markAllAsRead m
   | browsingFeeds m
   = m & feeds.both.feed.feedItems.traverse.isRead .~ True
 

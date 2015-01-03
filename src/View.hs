@@ -87,9 +87,9 @@ drawWin w e f = vertCat
   , w^.focus.to f
   , drawSeq e (w^.next)
   ]
-
-drawSeq :: (a -> Image) -> Seq a -> Image
-drawSeq f = vertCat . toList . fmap f
+  where
+  drawSeq :: (a -> Image) -> Seq a -> Image
+  drawSeq f = vertCat . toList . fmap f
 
 drawList :: (a -> Image) -> [a] -> Image
 drawList f = vertCat . map f
