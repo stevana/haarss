@@ -4,12 +4,10 @@ module Fetching where
 
 import Control.Applicative
 import Control.Monad
-import Control.Concurrent (forkIO)
-import Control.Concurrent.STM
+import Control.Concurrent.ParallelIO
 import Control.Exception
 import Control.Lens
 
-import Data.Array.IO
 import qualified Data.ByteString.Lazy as BS
 import Data.Time
 import qualified Data.Text as T
@@ -55,24 +53,8 @@ download1 url callback parser = do
 
 download :: [String] -> IO () -> (BS.ByteString -> Either String a) ->
             IO [(Maybe a, History)]
-download [url] callback parser = (:[]) <$> download1 url callback parser
-download urls  callback parser = do
-
-  alive  <- newTVarIO $ length urls
-  result <- newArray_ (1, length urls)
-         :: IO (IOArray Int (Maybe a, History))
-  forM_ (zip [1..] urls) $ \(idx, url) -> do
-    forkIO $ do
-      writeArray result idx =<< download1 url callback parser
-      atomically $ modifyTVar alive pred
-
-  waitForThreads alive
-  getElems result
-  where
-  waitForThreads :: TVar Int -> IO ()
-  waitForThreads alive = atomically $ do
-    n <- readTVar alive
-    check (n == 0)
+download urls  callback parser = parallel $
+  flip map urls $ \url -> download1 url callback parser
 
 feedParser :: BS.ByteString -> Either String Feed
 feedParser = bimap show id . parseFeed
