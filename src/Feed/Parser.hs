@@ -5,7 +5,7 @@ module Feed.Parser (parseFeed) where
 import           Control.Exception       (SomeException)
 import           Data.ByteString.Lazy    (ByteString)
 import           Data.Text               (Text)
-import           Data.Text               as T (lines, strip)
+import           Data.Text               as T (lines, strip, null)
 import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
 import           Data.Text.Lens          (unpacked)
 import           Text.XML                (def, parseText)
@@ -30,7 +30,7 @@ fromXML doc = case doc^.root.localName of
   _      -> fail   $ error "fromXML: unknown feed kind."
 
 process :: Text -> Text
-process = T.strip . head . T.lines
+process = T.strip . head . filter (not . T.null) . T.lines
 
 fromRSS1 :: Document -> Feed
 fromRSS1 doc = newEmptyFeed RSS1Kind
