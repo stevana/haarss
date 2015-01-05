@@ -53,8 +53,8 @@ main = do
   model               <- resizeModel sz <$> readSavedModel cfg
   (eEvent, pushEvent) <- sync newEvent
   tid                 <- myThreadId
-  sync $ setupReactive cfg vty model eEvent tid
 
+  sync $ setupReactive cfg vty model eEvent tid
 
   forever (Vty.nextEvent vty >>= sync . pushEvent)
     `catches` [ Handler (\(SaveModel fs) -> do
@@ -76,6 +76,8 @@ main = do
 pattern Key c       = ModKey [] c
 pattern ModKey ms c = Vty.EvKey (Vty.KChar c) ms
 pattern Enter       = Vty.EvKey Vty.KEnter []
+pattern BS          = Vty.EvKey Vty.KBS    []
+pattern Esc         = Vty.EvKey Vty.KEsc   []
 
 setupReactive :: Config -> Vty.Vty -> Model -> Event Vty.Event ->
                  ThreadId -> Reactive ()
@@ -96,6 +98,7 @@ setupReactive cfg vty initModel eEvent tid = do
       cmd (Key 'j')  m Normal = normal Move Down
       cmd (Key 'J')  m Normal = normal Move Bot
       cmd (Key 'l')  m Normal = normal Move In
+      cmd Enter      m Normal = normal Move In
       cmd (Key 'q')  m Normal = if browsingFeeds m
                                 then normal Quit (m^.feeds.to closeWindow)
                                 else normal Move Out
@@ -105,10 +108,12 @@ setupReactive cfg vty initModel eEvent tid = do
       cmd (Key 'm')  m Normal = normal MarkAllAsRead ()
       cmd (Key 'M')  m Normal = normal MarkAsRead ()
       cmd (Key 'a')  m Normal = input  OpenPrompt AddFeed
+      cmd (Key '/')  m Normal = input  OpenPrompt SearchPrompt
       cmd (Key '\t') m Normal = input  OpenPrompt SearchPrompt
       cmd _          m Normal = (Nothing, Normal)
-      cmd (Key '\t') m Input  = undefined -- search next?
       cmd (Key c)    m Input  = input  PutPrompt c
+      cmd BS         m Input  = input  DelPrompt ()
+      cmd Esc        m Input  = normal CancelPrompt ()
       cmd Enter      m Input  = normal ClosePrompt ()
 
   rec
@@ -146,8 +151,10 @@ setupReactive cfg vty initModel eEvent tid = do
             return ()
           resp MarkAllAsRead () = return ()
           resp MarkAsRead    () = return ()
-          resp OpenPrompt    p  = return ()
-          resp PutPrompt     c  = return ()
+          resp OpenPrompt    _  = return ()
+          resp PutPrompt     _  = return ()
+          resp DelPrompt     () = return ()
+          resp CancelPrompt  () = return ()
           resp ClosePrompt   () = return ()
           resp Quit          fs = throwTo tid $ SaveModel fs
 
@@ -160,9 +167,19 @@ setupReactive cfg vty initModel eEvent tid = do
         update OpenUrl       _   ()  m = m
         update MarkAllAsRead ()  ()  m = markAllAsRead m
         update MarkAsRead    ()  ()  m = markAsRead m
-        update OpenPrompt    p   ()  m = m
-        update PutPrompt     c   ()  m = m
-        update ClosePrompt   ()  ()  m = m
+        update OpenPrompt    p   ()  m = m & prompt ?~ (p, "")
+        update PutPrompt     c   ()  m = m & prompt._Just._2 %~ (++ [c])
+        update DelPrompt     ()  ()  m = m & prompt._Just._2 %~
+                                               \s -> if null s
+                                                     then ""
+                                                     else init s
+        update CancelPrompt  ()  ()  m = m & prompt .~ Nothing
+        update ClosePrompt   ()  ()  m = case m^.prompt of
+          Just (SearchPrompt, s) -> search (T.pack s) m'
+          Just (AddFeed,      s) -> m'
+          _                      -> m'
+          where
+          m' = m & prompt .~ Nothing
 
     let feedback :: Feedback -> Model -> Model
         feedback (Downloading n) m = m & downloading .~ n

@@ -30,8 +30,6 @@ module Model.Window
 
   , resize
   , resize'
-  , resizeRelative
-  , resizeRelative'
 
   , findFirst
   )
@@ -307,16 +305,16 @@ prop_resizeSize (Positive i) (Positive j) (NonEmpty xs) ds =
   where
   w = move ds (makeWindow i xs)
 
-resizeRelative :: Int -> Window a -> Window a
-resizeRelative i w = resize (size w + i) w
-
 ------------------------------------------------------------------------
 -- * Search
 
-findFirst :: (a -> Bool) -> Window a -> Window a
-findFirst p w | w^.next.to null = w
-              | w^.focus.to p   = w
-              | otherwise       = findFirst p (down w)
+findFirst :: Eq a => (a -> Bool) -> Window a -> Window a
+findFirst p w | down w == w = w
+              | otherwise   = go (down w)
+  where
+  go w' | w'^.focus.to p  = w'
+        | down w' == w'   = w
+        | otherwise       = go (down w')
 
 ------------------------------------------------------------------------
 -- * Heteregenous versions of above functions
@@ -327,7 +325,5 @@ up'   f g = fmap f . up   . fmap g
 top'  f g = fmap f . top  . fmap g
 bot'  f g = fmap f . bot  . fmap g
 
-resize', resizeRelative' :: (a -> b) -> (b -> a) -> Int ->
-                           Window' a b -> Window' a b
-resize'         f g i = fmap f . resize i . fmap g
-resizeRelative' f g i = fmap f . resizeRelative i . fmap g
+resize' :: (a -> b) -> (b -> a) -> Int -> Window' a b -> Window' a b
+resize' f g i = fmap f . resize i . fmap g

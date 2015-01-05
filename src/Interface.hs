@@ -9,6 +9,7 @@ module Interface where
 
 import Data.Text (Text)
 import Data.Time
+import Test.QuickCheck
 
 import Feed.Annotated
 
@@ -21,6 +22,8 @@ data Op'
   | OpenUrl'
   | OpenPrompt'
   | PutPrompt'
+  | DelPrompt'
+  | CancelPrompt'
   | ClosePrompt'
   | Search'
   | Resize'
@@ -35,6 +38,8 @@ data Op :: Op' -> * where
   OpenUrl        :: Op OpenUrl'
   OpenPrompt     :: Op OpenPrompt'
   PutPrompt      :: Op PutPrompt'
+  DelPrompt      :: Op DelPrompt'
+  CancelPrompt   :: Op CancelPrompt'
   ClosePrompt    :: Op ClosePrompt'
   Search         :: Op Search'
   Resize         :: Op Resize'
@@ -43,7 +48,18 @@ data Op :: Op' -> * where
 data Dir = Up | Down | In | Out | Top | Bot
   deriving (Show, Eq, Enum)
 
+instance Arbitrary Dir where
+  arbitrary = elements [Up, Down, In , Out, Top, Bot]
+
 data Prompt = AddFeed | SearchPrompt
+  deriving Eq
+
+instance Show Prompt where
+  show AddFeed      = "Add feed"
+  show SearchPrompt = "Search for"
+
+instance Arbitrary Prompt where
+  arbitrary = elements [AddFeed, SearchPrompt]
 
 type family Cmd (o :: Op') :: * where
   Cmd 'Move'           = Dir
@@ -54,6 +70,8 @@ type family Cmd (o :: Op') :: * where
   Cmd 'OpenUrl'        = Maybe Text
   Cmd 'OpenPrompt'     = Prompt
   Cmd 'PutPrompt'      = Char
+  Cmd 'DelPrompt'      = ()
+  Cmd 'CancelPrompt'   = ()
   Cmd 'ClosePrompt'    = ()
   Cmd 'Search'         = ()
   Cmd 'Resize'         = ()
@@ -70,6 +88,8 @@ type family Resp (o :: Op') :: * where
   Resp 'OpenUrl'        = ()
   Resp 'OpenPrompt'     = ()
   Resp 'PutPrompt'      = ()
+  Resp 'DelPrompt'      = ()
+  Resp 'CancelPrompt'   = ()
   Resp 'ClosePrompt'    = ()
   Resp 'Search'         = ()
   Resp 'Resize'         = ()

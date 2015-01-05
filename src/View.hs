@@ -16,6 +16,7 @@ import Numeric (readHex)
 import Feed.Feed
 import Feed.Annotated
 import Fetching.History
+import Interface
 import Model
 import Model.Window
 
@@ -40,14 +41,16 @@ render m sz = vertCat
   , separator
   , resizeHeight (regionHeight sz - 5) (drawModel m sz)
   , separator
-  , bar (T.pack (status (m^.downloading)))
+  , bar (T.pack (status (m^.downloading) (m^.prompt)))
   , separator
   ]
   where
-  status :: Int -> String
-  status 0 = ""
-  status n = " Downloading (" ++ show n ++ " feed" ++
-               (if n == 1 then "" else "s") ++ " to go)"
+  status :: Int -> Maybe (Prompt, String) -> String
+  status 0 Nothing       = ""
+  status n Nothing       = " Downloading (" ++ show n ++ " feed" ++
+                             (if n == 1 then "" else "s") ++ " to go)"
+  status 0 (Just (p, s)) = " " ++ show p ++ ": " ++ s
+  status _ _             = error "Impossible."
 
 drawModel :: Model -> DisplayRegion -> Image
 drawModel m (w, h) = case m^.browsing.focus of

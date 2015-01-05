@@ -35,6 +35,7 @@ import Model.Window
 data Model = Model
   { _browsing    :: Browse
   , _downloading :: Int
+  , _prompt      :: Maybe (Prompt, String)
   }
   deriving Eq
 
@@ -149,7 +150,7 @@ instance Show Focus where
     ]
 
 instance Arbitrary Model where
-  arbitrary = liftM2 Model arbitrary arbitrary
+  arbitrary = liftM3 Model arbitrary arbitrary arbitrary
 
 instance Arbitrary Focus where
   arbitrary = oneof
@@ -179,7 +180,7 @@ prop_serialisation (NonEmpty fs) dirs =
 ------------------------------------------------------------------------
 
 makeModel :: [AnnFeed] -> Model
-makeModel fs = Model (fmap TheFeed (makeWindow 20 fs)) 0
+makeModel fs = Model (fmap TheFeed (makeWindow 20 fs)) 0 Nothing
 
 initialModel :: UTCTime -> Config -> Model
 initialModel time cfg = makeModel (addOverviewFeed time fs)
@@ -198,9 +199,6 @@ resizeModel sz m = m & feeds %~ resize (regionHeight sz - 5)
 
 ------------------------------------------------------------------------
 -- * Movement
-
-instance Arbitrary Dir where
-  arbitrary = Test.QuickCheck.elements [Up, Down, In , Out, Top, Bot]
 
 moveWin :: Dir -> Window a -> Window a
 moveWin Up   = up
