@@ -7,6 +7,7 @@ import           Data.ByteString.Lazy    (ByteString)
 import           Data.Text               (Text)
 import           Data.Text               as T (lines, strip)
 import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
+import           Data.Text.Lens          (unpacked)
 import           Text.XML                (def, parseText)
 import           Text.XML.Lens
 
@@ -43,7 +44,7 @@ fromRSS1 doc = newEmptyFeed RSS1Kind
   toItem :: Element -> Item
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
-    & itemLink        .~ e^?entire.ell "link".text
+    & itemLink        .~ e^?entire.ell "link".text.unpacked
     & itemDate        .~ Nothing
     & itemFeedLink    .~ Nothing
     & itemDescription .~ e^?entire.ell "description".text
@@ -61,7 +62,7 @@ fromRSS2 doc = newEmptyFeed RSS2Kind
   toItem :: Element -> Item
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.el "title".text & mapped %~ process)
-    & itemLink        .~ e^?entire.el "link".text
+    & itemLink        .~ e^?entire.el "link".text.unpacked
     & itemDate        .~ e^?entire.el "pubDate".text
     & itemFeedLink    .~ Nothing
     & itemDescription .~ e^?entire.el "description".text
@@ -78,7 +79,7 @@ fromAtom doc = newEmptyFeed AtomKind
   toItem :: Element -> Item
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
-    & itemLink        .~ e^?entire.ell "link".attr "href"
+    & itemLink        .~ e^?entire.ell "link".attr "href".unpacked
     & itemDate        .~ e^?entire.ell "published".text
     & itemFeedLink    .~ Nothing
     & itemDescription .~ e^?entire.ell "summary".text

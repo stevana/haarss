@@ -102,11 +102,12 @@ setupReactive cfg vty initModel eEvent tid = do
       cmd (Key 'q')  m Normal = if browsingFeeds m
                                 then normal Quit (m^.feeds.to closeWindow)
                                 else normal Move Out
-      cmd (Key 'R')  m Normal = normal UpdateFeed  (getFeedUrl cfg m)
+      cmd (Key 'R')  m Normal = normal UpdateFeed  (getFeedUrl m)
       cmd (Key 'r')  m Normal = normal UpdateFeeds (cfg^.urls)
       cmd (Key 'o')  m Normal = normal OpenUrl (getItemUrl m)
       cmd (Key 'm')  m Normal = normal MarkAllAsRead ()
       cmd (Key 'M')  m Normal = normal MarkAsRead ()
+      cmd (Key 'D')  m Normal = normal RemoveFeed ()
       cmd (Key 'a')  m Normal = input  OpenPrompt AddFeed
       cmd (Key '/')  m Normal = input  OpenPrompt SearchPrompt
       cmd (Key '\t') m Normal = input  OpenPrompt SearchPrompt
@@ -126,13 +127,11 @@ setupReactive cfg vty initModel eEvent tid = do
           (\(ExCmd o p) -> ExResp o p <$> resp o p) eCmd
           where
           resp :: Op o -> Cmd o -> IO (Resp o)
-          resp UpdateFeed    mu = case mu of
-            Nothing  -> return Nothing
-            Just url -> do
-              sync $ pushFeedback $ Downloading 1
-              [f] <- downloadFeeds [url]
-                       (sync $ pushFeedback FeedDownloaded)
-              return $ Just f
+          resp UpdateFeed  url  = do
+            sync $ pushFeedback $ Downloading 1
+            [f] <- downloadFeeds [url]
+                     (sync $ pushFeedback FeedDownloaded)
+            return $ Just f
           resp UpdateFeeds   us = do
             sync $ pushFeedback $ Downloading (length us)
             time <- getCurrentTime
@@ -146,7 +145,7 @@ setupReactive cfg vty initModel eEvent tid = do
               -- We use createProcess, rather than say rawSystem, so we
               -- can redirect stderr and thus avoid having the terminal
               -- flooded by warnings from the browser.
-              _ <- createProcess (proc (cfg^.browser) [T.unpack url])
+              _ <- createProcess (proc (cfg^.browser) [url])
                      { std_err = CreatePipe }
 
               return ()
@@ -158,6 +157,7 @@ setupReactive cfg vty initModel eEvent tid = do
           resp CancelPrompt  () = return ()
           resp ClosePrompt   () = return ()
           resp Quit          fs = throwTo tid $ SaveModel fs
+          resp RemoveFeed    () = return ()
 
     let update :: Op o -> Cmd o -> Resp o -> Model -> Model
         update Move          d   ()  m = move d m
@@ -177,10 +177,11 @@ setupReactive cfg vty initModel eEvent tid = do
         update CancelPrompt  ()  ()  m = m & prompt .~ Nothing
         update ClosePrompt   ()  ()  m = case m^.prompt of
           Just (SearchPrompt, s) -> search (T.pack s) m'
-          Just (AddFeed,      s) -> m'
+          Just (AddFeed,      s) -> addFeed s m'
           _                      -> m'
           where
           m' = m & prompt .~ Nothing
+        update RemoveFeed    ()  () m = removeFeed m
 
     let feedback :: Feedback -> Model -> Model
         feedback (Downloading n) m = m & downloading .~ n

@@ -23,7 +23,7 @@ import           Test.QuickCheck
 
 ------------------------------------------------------------------------
 
-type URL  = Text
+type URL  = String
 type Date = Text
 
 data Feed' is = Feed

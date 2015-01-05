@@ -64,13 +64,16 @@ downloadFeeds urls callback =
   zipWith (curry downloadToFeed) urls <$> download urls callback feedParser
   where
   downloadToFeed :: (String, (Maybe Feed, History)) -> AnnFeed
-  downloadToFeed (_,   (Just f,  h)) = defAnnFeed f &
+  downloadToFeed (url, (Just f,  h)) = defAnnFeed f' &
                                          history .~ [h]
+    where
+    f' = f & feedHome .~ url
   downloadToFeed (url, (Nothing, h)) = defAnnFeed f &
                                          history .~ [h]
     where
     f = newEmptyFeed AtomKind
       & feedTitle ?~ T.pack url
+      & feedHome  .~ url
 
 ------------------------------------------------------------------------
 

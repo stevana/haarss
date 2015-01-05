@@ -18,6 +18,8 @@ module Model.Window
   , closeWindow'
 
   , size
+  , add
+  , remove
 
   , down
   , down'
@@ -126,6 +128,32 @@ closeWindow' g = closeWindow . fmap g
 -- | The size of visible part of the window.
 size :: Window' a b -> Int
 size w = w^.prev.to length + 1 + w^.next.to length
+
+add :: a -> Window a -> Window a
+add x w = resize (size w) $
+  w & next  %~ (w^.focus <|)
+    & focus .~ x
+
+remove :: Window a -> Window a
+remove w@(Window _ _  _ (viewl -> n :< ns) _)
+  = resize (size w) $ w & focus .~ n
+                        & next  .~ ns
+remove w@(Window _ _  _ (viewl -> EmptyL) (viewl -> b :< bs))
+  = resize (size w) $ w & focus .~ b
+                        & below .~ bs
+remove w@(Window _ (viewr -> ps :> p) _ (viewl -> EmptyL) (viewl -> EmptyL))
+  = resize (size w) $ w & focus .~ p
+                        & prev  .~ ps
+remove w@(Window (viewr -> as :> a) (viewr -> EmptyR) _
+                 (viewl -> EmptyL)  (viewl -> EmptyL))
+  = resize (size w) $ w & focus .~ a
+                        & above .~ as
+remove w@(Window (viewr -> EmptyR)  (viewr -> EmptyR) _
+                 (viewl -> EmptyL)  (viewl -> EmptyL))
+  = w
+
+prop_addRemove :: Int -> Window Int -> Bool
+prop_addRemove x w = remove (add x w) == w
 
 ------------------------------------------------------------------------
 -- * Movement

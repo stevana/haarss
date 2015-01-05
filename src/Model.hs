@@ -12,7 +12,6 @@ import           Control.Applicative
 import           Control.Lens         hiding (below)
 import           Control.Monad
 import           Data.Foldable
-import qualified Data.Sequence        as Seq
 import           Data.Serialize
 import           Data.Text            (Text)
 import qualified Data.Text            as T
@@ -192,7 +191,7 @@ initialModel time cfg = makeModel (addOverviewFeed time fs)
   fs = cfg^.urls & mapped %~ \url -> defAnnFeed $
          newEmptyFeed AtomKind
            & feedTitle      ?~ T.pack url
-           & feedHome       .~ T.pack url
+           & feedHome       .~ url
            & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
                                  rfc822DateFormat time)
 
@@ -245,13 +244,10 @@ browsingFeeds m = m^.browsing.focus & has _TheFeed
 browsingItems :: Model -> Bool
 browsingItems m = m^.browsing.focus & has _TheItems
 
-getFeedUrl :: Config -> Model -> Maybe String
-getFeedUrl cfg m = cfg^.urls^? ix (i - 1)
-  where
-  i = m^.browsing.prev.to  Seq.length +
-      m^.browsing.above.to Seq.length
+getFeedUrl :: Model -> String
+getFeedUrl m = m^.feeds.focus.feed.feedHome
 
-getItemUrl :: Model -> Maybe Text
+getItemUrl :: Model -> Maybe String
 getItemUrl m = m^.browsing.focus.annItems.focus.item.itemLink
 
 ------------------------------------------------------------------------
@@ -299,6 +295,16 @@ search t m | browsingFeeds m = m & feeds %~ findFirst (matchFeed t)
   matchText :: Text -> Maybe Text -> Bool
   matchText _  Nothing    = False
   matchText t' (Just t'') = T.toCaseFold t' `T.isInfixOf` T.toCaseFold t''
+
+addFeed :: String -> Model -> Model
+addFeed url m = m & feeds %~ add f
+  where
+  f :: AnnFeed
+  f = newEmptyAnnFeed & feed.feedTitle ?~ T.pack url
+                      & feed.feedHome  .~ url
+
+removeFeed :: Model -> Model
+removeFeed m = m & feeds %~ remove
 
 ------------------------------------------------------------------------
 

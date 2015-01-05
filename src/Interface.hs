@@ -6,11 +6,12 @@
 
 module Interface where
 
-import           Data.Text       (Text)
 import           Data.Time
 import           Test.QuickCheck
 
 import           Feed.Annotated
+
+------------------------------------------------------------------------
 
 data Op'
   = Move'
@@ -24,6 +25,7 @@ data Op'
   | DelPrompt'
   | CancelPrompt'
   | ClosePrompt'
+  | RemoveFeed'
   | Search'
   | Resize'
   | Quit'
@@ -40,6 +42,7 @@ data Op :: Op' -> * where
   DelPrompt      :: Op DelPrompt'
   CancelPrompt   :: Op CancelPrompt'
   ClosePrompt    :: Op ClosePrompt'
+  RemoveFeed     :: Op RemoveFeed'
   Search         :: Op Search'
   Resize         :: Op Resize'
   Quit           :: Op Quit'
@@ -64,14 +67,15 @@ type family Cmd (o :: Op') :: * where
   Cmd 'Move'           = Dir
   Cmd 'MarkAsRead'     = ()
   Cmd 'MarkAllAsRead'  = ()
-  Cmd 'UpdateFeed'     = Maybe String
+  Cmd 'UpdateFeed'     = String
   Cmd 'UpdateFeeds'    = [String]
-  Cmd 'OpenUrl'        = Maybe Text
+  Cmd 'OpenUrl'        = Maybe String
   Cmd 'OpenPrompt'     = Prompt
   Cmd 'PutPrompt'      = Char
   Cmd 'DelPrompt'      = ()
   Cmd 'CancelPrompt'   = ()
   Cmd 'ClosePrompt'    = ()
+  Cmd 'RemoveFeed'     = ()
   Cmd 'Search'         = ()
   Cmd 'Resize'         = ()
   Cmd 'Quit'           = [AnnFeed]
@@ -90,6 +94,7 @@ type family Resp (o :: Op') :: * where
   Resp 'DelPrompt'      = ()
   Resp 'CancelPrompt'   = ()
   Resp 'ClosePrompt'    = ()
+  Resp 'RemoveFeed'     = ()
   Resp 'Search'         = ()
   Resp 'Resize'         = ()
   Resp 'Quit'           = ()
