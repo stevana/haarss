@@ -2,12 +2,12 @@
 
 module Config (Config, urls, browser, readConfig) where
 
-import Control.Lens (makeLenses)
-import Data.Char (isSpace)
-import System.Directory (doesFileExist, createDirectoryIfMissing)
-import System.FilePath (takeDirectory)
+import           Control.Lens     (makeLenses)
+import           Data.Char        (isSpace)
+import           System.Directory (createDirectoryIfMissing, doesFileExist)
+import           System.FilePath  (takeDirectory)
 
-import Constants
+import           Constants
 
 ------------------------------------------------------------------------
 -- * Types

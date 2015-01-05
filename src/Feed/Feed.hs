@@ -1,19 +1,25 @@
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable,
-    TypeSynonymInstances, TemplateHaskell, OverloadedStrings,
-    DeriveGeneric, StandaloneDeriving #-}
+{-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Feed.Feed where
 
-import Control.Applicative
-import Control.Lens
-import Data.Foldable (Foldable)
-import Data.Serialize
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
-import GHC.Generics (Generic)
-import Test.QuickCheck
+import           Control.Applicative
+import           Control.Lens
+import           Data.Foldable       (Foldable)
+import           Data.Maybe
+import           Data.Serialize
+import           Data.Text           (Text)
+import qualified Data.Text           as T
+import           Data.Text.Encoding  (decodeUtf8, encodeUtf8)
+import           GHC.Generics        (Generic)
+import           Test.QuickCheck
 
 ------------------------------------------------------------------------
 
@@ -38,7 +44,7 @@ makeLenses ''Feed'
 
 be :: (Contravariant f, Profunctor p) =>
        a -> Optical' p p f (Maybe a) a
-be x = to (maybe x id)
+be x = to (fromMaybe x)
 
 instance Show (Feed' is) where
   show f = f^.feedTitle.to (maybe "(no title)" T.unpack)

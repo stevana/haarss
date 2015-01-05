@@ -1,16 +1,20 @@
-{-# LANGUAGE TemplateHaskell, StandaloneDeriving, DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell    #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Fetching.History where
 
-import Control.Applicative
-import Control.Lens
-import Data.Serialize
-import Data.Time (UTCTime(..), DiffTime, Day(..), toModifiedJulianDay, secondsToDiffTime)
-import GHC.Generics (Generic)
-import Network.HTTP.Client (HttpException(..))
-import Network.HTTP.Types.Status (Status(..))
-import Test.QuickCheck hiding (Success, Failure)
+import           Control.Applicative
+import           Control.Lens
+import           Data.Serialize
+import           Data.Time                 (Day (..), DiffTime, UTCTime (..),
+                                            secondsToDiffTime,
+                                            toModifiedJulianDay)
+import           GHC.Generics              (Generic)
+import           Network.HTTP.Client       (HttpException (..))
+import           Network.HTTP.Types.Status (Status (..))
+import           Test.QuickCheck           hiding (Failure, Success)
 
 ------------------------------------------------------------------------
 
@@ -54,12 +58,12 @@ simplifyHttpException e = case e of
   OverlongHeaders                    -> OtherException
   ResponseTimeout                    -> OtherException
   FailedConnectionException _ _      -> OtherException
-  FailedConnectionException2 _ _ _ _ -> OtherException
+  FailedConnectionException2 {}      -> OtherException
   ExpectedBlankAfter100Continue      -> OtherException
   InvalidStatusLine _                -> OtherException
   InvalidHeader _                    -> OtherException
   InternalIOException _              -> OtherException
-  ProxyConnectException _ _ _        -> OtherException
+  ProxyConnectException {}           -> OtherException
   NoResponseDataReceived             -> OtherException
   TlsException _                     -> OtherException
   TlsNotSupported                    -> OtherException

@@ -1,23 +1,25 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, DeriveGeneric,
-             StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell    #-}
 
 module Feed.Annotated where
 
-import Control.Applicative
-import Control.Lens
-import Data.List (find)
-import Data.Maybe
-import Data.Monoid
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Time
-import Data.Serialize
-import GHC.Generics (Generic)
-import System.Locale
-import Test.QuickCheck hiding (Success, Failure)
+import           Control.Applicative
+import           Control.Lens
+import           Data.List           (find)
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Serialize
+import           Data.Text           (Text)
+import qualified Data.Text           as T
+import           Data.Time
+import           GHC.Generics        (Generic)
+import           System.Locale
+import           Test.QuickCheck     hiding (Failure, Success)
 
-import Feed.Feed
-import Fetching.History
+import           Feed.Feed
+import           Fetching.History
 
 ------------------------------------------------------------------------
 
@@ -115,7 +117,7 @@ addOverviewFeed time fs = overview : fs
       is' :: [(AnnItem, Maybe Text)]
       is' = fs & concatMapOf folded (\f -> zip
         (f^.feed.feedItems^..folded.filtered (not . _isRead))
-        (cycle [f^.feed.feedTitle]))
+        (repeat (f^.feed.feedTitle)))
 
 -- | The overview feed should have as many items as there are unread
 -- items in the feeds from which the overview was created.

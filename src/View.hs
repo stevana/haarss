@@ -1,24 +1,25 @@
-{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module View (viewModel) where
 
-import Control.Lens
-import Data.Char (chr)
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Foldable (toList)
-import Data.Sequence (Seq)
-import Graphics.Vty hiding (resize)
-import Graphics.Vty.Prelude
-import Network.HTTP.Types.Status
-import Numeric (readHex)
+import           Control.Lens
+import           Data.Char                 (chr)
+import           Data.Foldable             (toList)
+import           Data.Sequence             (Seq)
+import           Data.Text                 (Text)
+import qualified Data.Text                 as T
+import           Graphics.Vty              hiding (resize)
+import           Graphics.Vty.Prelude
+import           Network.HTTP.Types.Status
+import           Numeric                   (readHex)
 
-import Feed.Feed
-import Feed.Annotated
-import Fetching.History
-import Interface
-import Model
-import Model.Window
+import           Feed.Annotated
+import           Feed.Feed
+import           Fetching.History
+import           Interface
+import           Model
+import           Model.Window
 
 ------------------------------------------------------------------------
 

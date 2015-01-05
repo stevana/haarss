@@ -1,15 +1,15 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE PolyKinds                 #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE TypeOperators             #-}
 
-import Control.Applicative
+import           Control.Applicative
 
-import FRP.Sodium
-import FRP.Sodium.IO
+import           FRP.Sodium
+import           FRP.Sodium.IO
 
 data Op = Move | Fetch | Ask | PutChar | Done
 

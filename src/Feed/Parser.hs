@@ -2,15 +2,15 @@
 
 module Feed.Parser (parseFeed) where
 
-import Control.Exception        (SomeException)
-import Data.ByteString.Lazy     (ByteString)
-import Data.Text                (Text)
-import Data.Text as T           (strip, lines)
-import Data.Text.Lazy.Encoding  (decodeUtf8', decodeLatin1)
-import Text.XML                 (parseText, def)
-import Text.XML.Lens
+import           Control.Exception       (SomeException)
+import           Data.ByteString.Lazy    (ByteString)
+import           Data.Text               (Text)
+import           Data.Text               as T (lines, strip)
+import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
+import           Text.XML                (def, parseText)
+import           Text.XML.Lens
 
-import Feed.Feed
+import           Feed.Feed
 
 ------------------------------------------------------------------------
 

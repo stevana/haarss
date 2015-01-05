@@ -1,17 +1,16 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE KindSignatures            #-}
+{-# LANGUAGE TypeFamilies              #-}
 
 module Interface where
 
-import Data.Text (Text)
-import Data.Time
-import Test.QuickCheck
+import           Data.Text       (Text)
+import           Data.Time
+import           Test.QuickCheck
 
-import Feed.Annotated
+import           Feed.Annotated
 
 data Op'
   = Move'

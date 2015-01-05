@@ -1,7 +1,7 @@
 module Constants (getConfigPath, getModelPath) where
 
-import System.Environment (getEnv)
-import System.FilePath ((</>))
+import           System.Environment (getEnv)
+import           System.FilePath    ((</>))
 
 ------------------------------------------------------------------------
 -- * Constants

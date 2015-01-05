@@ -2,29 +2,29 @@
 
 module Fetching where
 
-import Control.Applicative
-import Control.Monad
-import Control.Concurrent.ParallelIO
-import Control.Exception
-import Control.Lens
+import           Control.Applicative
+import           Control.Concurrent.ParallelIO
+import           Control.Exception
+import           Control.Lens
+import           Control.Monad
 
-import qualified Data.ByteString.Lazy as BS
-import Data.Time
-import qualified Data.Text as T
+import qualified Data.ByteString.Lazy          as BS
+import qualified Data.Text                     as T
+import           Data.Time
 
-import Network.Wreq
-import Network.HTTP.Client (HttpException)
-import Network.HTTP.Client.TLS (tlsManagerSettings)
+import           Network.HTTP.Client           (HttpException)
+import           Network.HTTP.Client.TLS       (tlsManagerSettings)
+import           Network.Wreq
 
-import System.Timeout
+import           System.Timeout
 
-import Fetching.History
-import Feed.Feed
-import Feed.Annotated
-import Feed.Parser
+import           Feed.Annotated
+import           Feed.Feed
+import           Feed.Parser
+import           Fetching.History
 
-import Constants
 import qualified Config
+import           Constants
 
 ------------------------------------------------------------------------
 
@@ -61,7 +61,7 @@ feedParser = bimap show id . parseFeed
 
 downloadFeeds :: [String] -> IO () -> IO [AnnFeed]
 downloadFeeds urls callback =
-  map downloadToFeed . zip urls <$> download urls callback feedParser
+  zipWith (curry downloadToFeed) urls <$> download urls callback feedParser
   where
   downloadToFeed :: (String, (Maybe Feed, History)) -> AnnFeed
   downloadToFeed (_,   (Just f,  h)) = defAnnFeed f &

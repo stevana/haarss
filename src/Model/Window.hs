@@ -1,6 +1,6 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor   #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns    #-}
 
 module Model.Window
   ( Window
@@ -35,17 +35,17 @@ module Model.Window
   )
   where
 
-import qualified Prelude as Prelude
-import Prelude hiding (length, null)
+import           Prelude             hiding (length, null)
+import qualified Prelude
 
-import Control.Applicative hiding (empty)
-import Control.Lens hiding ((<|), (|>), below)
-import Data.Bifoldable
-import Data.Bitraversable
-import Data.Foldable
-import Data.Monoid
-import Data.Sequence as Seq
-import Test.QuickCheck hiding (resize)
+import           Control.Applicative hiding (empty)
+import           Control.Lens        hiding (below, (<|), (|>))
+import           Data.Bifoldable
+import           Data.Bitraversable
+import           Data.Foldable
+import           Data.Monoid
+import           Data.Sequence       as Seq
+import           Test.QuickCheck     hiding (resize)
 
 ------------------------------------------------------------------------
 -- * Types

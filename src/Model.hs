@@ -1,33 +1,36 @@
-{-# LANGUAGE TemplateHaskell, DeriveFunctor, DeriveTraversable,
-             DeriveFoldable, OverloadedStrings #-}
+{-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Model where
 
-import Prelude hiding (foldr, foldl)
+import           Prelude              hiding (foldl, foldr)
 
-import Control.Applicative
-import Control.Monad
-import Control.Lens hiding (below)
-import Data.Foldable
-import qualified Data.Sequence as Seq
-import Data.Serialize
-import Data.Text (Text)
-import qualified Data.Text as T
-import Test.QuickCheck hiding (resize)
+import           Control.Applicative
+import           Control.Lens         hiding (below)
+import           Control.Monad
+import           Data.Foldable
+import qualified Data.Sequence        as Seq
+import           Data.Serialize
+import           Data.Text            (Text)
+import qualified Data.Text            as T
+import           Test.QuickCheck      hiding (resize)
 
 -- XXX:
-import qualified Data.ByteString as BS
-import Data.Time
-import System.Directory
-import System.Locale
-import Graphics.Vty.Prelude
+import qualified Data.ByteString      as BS
+import           Data.Time
+import           Graphics.Vty.Prelude
+import           System.Directory
+import           System.Locale
 
-import Config
-import Constants
-import Feed.Feed
-import Feed.Annotated
-import Interface
-import Model.Window
+import           Config
+import           Constants
+import           Feed.Annotated
+import           Feed.Feed
+import           Interface
+import           Model.Window
 
 ------------------------------------------------------------------------
 -- * Datatypes
@@ -43,7 +46,7 @@ type Browse = Window' AnnFeed Focus
 
 data Focus
   = TheFeed
-      { _annFeed  :: AnnFeed
+      { _annFeed :: AnnFeed
       }
   | TheItems
       { _annFeed  :: AnnFeed
@@ -131,7 +134,7 @@ instance Show Model where
     , "Length of items window: " ++
         m^.items.to (show . length . closeWindow)
     ]
-  show m | otherwise       = unlines
+  show m                   = unlines
     [ "Browsing the text."
     , ""
     , m^.browsing.focus.annItems.focus.item.itemDescription
@@ -231,7 +234,7 @@ moveBrowse d fz = case fz^.focus of
     Out -> fz & focus .~ TheItems f iz
     _   -> fz & focus .~ TheText  f (moveWin d iz & focus.isRead .~ True) s
 
-move :: Dir -> (Model -> Model)
+move :: Dir -> Model -> Model
 move d m = m & browsing %~ moveBrowse d
 
 ------------------------------------------------------------------------
@@ -312,5 +315,5 @@ readSavedModel cfg = do
     else do
       em <- decode <$> BS.readFile modelPath
       case em of
-        Left _  -> error $ "readSavedModel: failed to restore saved model."
+        Left _  -> error "readSavedModel: failed to restore saved model."
         Right m -> return m

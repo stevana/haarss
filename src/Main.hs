@@ -143,12 +143,13 @@ setupReactive cfg vty initModel eEvent tid = do
             Nothing  -> return ()
             Just url -> do
 
-            -- We use createProcess, rather than say rawSystem, so we
-            -- can redirect stderr and thus avoid having the terminal
-            -- flooded by warnings from the browser.
-            _ <- createProcess (proc (cfg^.browser) [T.unpack url])
-                   { std_err = CreatePipe }
-            return ()
+              -- We use createProcess, rather than say rawSystem, so we
+              -- can redirect stderr and thus avoid having the terminal
+              -- flooded by warnings from the browser.
+              _ <- createProcess (proc (cfg^.browser) [T.unpack url])
+                     { std_err = CreatePipe }
+
+              return ()
           resp MarkAllAsRead () = return ()
           resp MarkAsRead    () = return ()
           resp OpenPrompt    _  = return ()
