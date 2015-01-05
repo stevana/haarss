@@ -17,7 +17,6 @@ data Op'
   = Move'
   | MarkAsRead'
   | MarkAllAsRead'
-  | UpdateFeed'
   | UpdateFeeds'
   | OpenUrl'
   | OpenPrompt'
@@ -34,7 +33,6 @@ data Op :: Op' -> * where
   Move           :: Op Move'
   MarkAsRead     :: Op MarkAsRead'
   MarkAllAsRead  :: Op MarkAllAsRead'
-  UpdateFeed     :: Op UpdateFeed'
   UpdateFeeds    :: Op UpdateFeeds'
   OpenUrl        :: Op OpenUrl'
   OpenPrompt     :: Op OpenPrompt'
@@ -67,7 +65,6 @@ type family Cmd (o :: Op') :: * where
   Cmd 'Move'           = Dir
   Cmd 'MarkAsRead'     = ()
   Cmd 'MarkAllAsRead'  = ()
-  Cmd 'UpdateFeed'     = String
   Cmd 'UpdateFeeds'    = [String]
   Cmd 'OpenUrl'        = Maybe String
   Cmd 'OpenPrompt'     = Prompt
@@ -86,7 +83,6 @@ type family Resp (o :: Op') :: * where
   Resp 'Move'           = ()
   Resp 'MarkAsRead'     = ()
   Resp 'MarkAllAsRead'  = ()
-  Resp 'UpdateFeed'     = Maybe AnnFeed
   Resp 'UpdateFeeds'    = (UTCTime, [AnnFeed])
   Resp 'OpenUrl'        = ()
   Resp 'OpenPrompt'     = ()

@@ -269,13 +269,11 @@ markAllAsRead m
 
   | otherwise = m & items.both.isRead .~ True
 
-feedDownloaded :: AnnFeed -> Model -> Model
-feedDownloaded f m =
-  m & browsing.focus.annFeed %~ flip Feed.Annotated.merge f
-    & downloading            .~ 0
-
 feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
-feedsDownloaded (time, fs) m =
+feedsDownloaded (time, [f]) m =
+  -- XXX: The overview feeds should be update as well...
+  m & feeds.focus %~ flip Feed.Annotated.merge f
+feedsDownloaded (time, fs)  m =
   m & feeds .~ makeWindow (m^.feeds.to size)
                  (addOverviewFeed time (mergeFeeds
                    (m^.feeds.to (drop 1 . closeWindow))
