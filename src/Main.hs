@@ -72,11 +72,17 @@ main = do
 
 ------------------------------------------------------------------------
 
-pattern Key c       = ModKey [] c
-pattern ModKey ms c = Vty.EvKey (Vty.KChar c) ms
-pattern Enter       = Vty.EvKey Vty.KEnter []
-pattern BS          = Vty.EvKey Vty.KBS    []
-pattern Esc         = Vty.EvKey Vty.KEsc   []
+key  c    = Vty.EvKey (Vty.KChar c) []
+ctrl c    = Vty.EvKey (Vty.KChar c) [Vty.MCtrl]
+enter     = Vty.EvKey Vty.KEnter []
+backspace = Vty.EvKey Vty.KBS    []
+esc       = Vty.EvKey Vty.KEsc   []
+
+isKey (Vty.EvKey (Vty.KChar _) []) = True
+isKey _                            = False
+
+getKey (Vty.EvKey (Vty.KChar c) []) = c
+getKey _                            = error "getKey"
 
 setupReactive :: Config -> Vty.Vty -> Model -> Event Vty.Event ->
                  ThreadId -> Reactive ()
@@ -91,36 +97,36 @@ setupReactive cfg vty initModel eEvent tid = do
       input  o c = (Just $ ExCmd o c, Input)
 
   let cmd :: Vty.Event -> Model -> Mode -> (Maybe ExCmd, Mode)
-      cmd _          m _      | m^.downloading > 0 = (Nothing, Normal)
-      cmd (Key 'K')  m Normal = normal Move Top
-      cmd (Key 'k')  m Normal = normal Move Up
-      cmd (Key 'j')  m Normal = normal Move Down
-      cmd (Key 'J')  m Normal = normal Move Bot
-      cmd (Key 'l')  m Normal = normal Move In
-      cmd Enter      m Normal = normal Move In
-      cmd (Key 'q')  m Normal = if browsingFeeds m
-                                then normal Quit (m^.feeds.to closeWindow)
-                                else normal Move Out
-      cmd (Key 'R')  m Normal = normal UpdateFeeds [getFeedUrl m]
-      cmd (Key 'r')  m Normal = normal UpdateFeeds (cfg^.urls)
-      cmd (Key 'o')  m Normal = normal OpenUrl (getItemUrl m)
-      cmd (Key 'm')  m Normal = normal MarkAllAsRead ()
-      cmd (Key 'M')  m Normal = normal MarkAsRead ()
-      cmd (Key 'D')  m Normal = normal RemoveFeed ()
-      cmd (Key 'a')  m Normal
-        | browsingFeeds m     = input  OpenPrompt AddFeed
-      cmd (Key '/')  m Normal = input  OpenPrompt SearchPrompt
-      cmd (Key '\t') m Normal = input  OpenPrompt SearchPrompt
-      cmd _          m Normal = (Nothing, Normal)
+      cmd e m Normal | m^.downloading > 0 = (Nothing, Normal)
+      cmd e _ Normal | key 'K' == e       = normal Move Top
+      cmd e _ Normal | key 'k' == e       = normal Move Up
+      cmd e _ Normal | key 'j' == e       = normal Move Down
+      cmd e _ Normal | key 'J' == e       = normal Move Bot
+      cmd e _ Normal | key 'l' == e       = normal Move In
+      cmd e _ Normal | enter   == e       = normal Move In
+      cmd e m Normal | key 'q' == e       = if browsingFeeds m
+                                            then normal Quit
+                                                (m^.feeds.to closeWindow)
+                                            else normal Move Out
+      cmd e m Normal | key 'R' == e       = normal UpdateFeeds
+                                                  [getFeedUrl m]
+      cmd e _ Normal | key 'r' == e       = normal UpdateFeeds (cfg^.urls)
+      cmd e m Normal | key 'o' == e       = normal OpenUrl (getItemUrl m)
+      cmd e _ Normal | key 'm' == e       = normal MarkAllAsRead ()
+      cmd e _ Normal | key 'M' == e       = normal MarkAsRead ()
+      cmd e _ Normal | key 'D' == e       = normal RemoveFeed ()
+      cmd e m Normal | key 'a' == e &&
+                       browsingFeeds m    = input  OpenPrompt AddFeed
+      cmd e _ Normal | key '/'  == e      = input  OpenPrompt SearchPrompt
+      cmd e _ Normal | key '\t' == e      = input  OpenPrompt SearchPrompt
+      cmd _ _ Normal                      = (Nothing, Normal)
 
-      cmd (Key c)    m Input  = input  PutPrompt c
-      cmd BS         m Input  = input  DelPrompt ()
-      cmd Esc        m Input  = normal CancelPrompt ()
-      cmd Enter      m Input  = normal ClosePrompt ()
-      cmd (ModKey
-            [Vty.MCtrl]
-            'g')     m Input  = normal CancelPrompt ()
-      cmd _          m Input  = (Nothing, Input)
+      cmd e m Input  | isKey e             = input  PutPrompt (getKey e)
+      cmd e m Input  | backspace == e      = input  DelPrompt ()
+      cmd e m Input  | esc       == e      = normal CancelPrompt ()
+      cmd e m Input  | enter     == e      = normal ClosePrompt ()
+      cmd e m Input  | ctrl 'g'  == e      = normal CancelPrompt ()
+      cmd _ m Input                        = (Nothing, Input)
 
   rec
     eCmd <- filterJust <$>

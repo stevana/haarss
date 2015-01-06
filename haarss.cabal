@@ -13,7 +13,8 @@ author:              Stevan Andjelkovic
 maintainer:          Stevan Andjelkovic
 build-type:          Simple
 cabal-version:       >=1.8
-tested-with:         GHC == 7.8.3
+tested-with:         GHC == 7.6.3
+                     GHC == 7.8.3
 
 source-repository head
   type: git
