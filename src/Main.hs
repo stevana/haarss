@@ -1,36 +1,39 @@
-{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, PatternSynonyms,
-             GADTs, RecursiveDo #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RecursiveDo         #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
-import Data.Typeable
-import Data.Monoid
-import qualified Data.ByteString as BS
-import Data.Serialize
-import qualified Data.Text as T
-import Data.Time
+import qualified Data.ByteString     as BS
+import           Data.Monoid
+import           Data.Serialize
+import qualified Data.Text           as T
+import           Data.Time
+import           Data.Typeable
 
-import Control.Applicative
-import Control.Concurrent
-import Control.Exception
-import Control.Monad
-import Control.Lens
-import System.Exit
-import System.Process
+import           Control.Applicative
+import           Control.Concurrent
+import           Control.Exception
+import           Control.Lens
+import           Control.Monad
+import           System.Exit
+import           System.Process
 
-import qualified Graphics.Vty as Vty
+import qualified Graphics.Vty        as Vty
 
-import FRP.Sodium
-import FRP.Sodium.IO
+import           FRP.Sodium
+import           FRP.Sodium.IO
 
-import Constants
-import Config
-import Interface
-import Model
-import Model.Window
-import View
-import Feed.Annotated
-import Fetching
+import           Config
+import           Constants
+import           Feed.Annotated
+import           Fetching
+import           Interface
+import           Model
+import           Model.Window
+import           View
 
 ------------------------------------------------------------------------
 

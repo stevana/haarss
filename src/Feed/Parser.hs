@@ -5,7 +5,7 @@ module Feed.Parser (parseFeed) where
 import           Control.Exception       (SomeException)
 import           Data.ByteString.Lazy    (ByteString)
 import           Data.Text               (Text)
-import           Data.Text               as T (lines, strip, null)
+import           Data.Text               as T (lines, null, strip)
 import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
 import           Data.Text.Lens          (unpacked)
 import           Text.XML                (def, parseText)
