@@ -65,12 +65,10 @@ main = do
                   exitSuccess)
               , Handler (\e              -> do
                   Vty.shutdown vty
-                  failure (show (e :: SomeException)))
+                  putStrLn $ "Unexpected error: " ++
+                    show (e :: SomeException)
+                  exitFailure)
               ]
-              where
-              failure err = do
-                putStrLn $ "Unexpected error: " ++ err
-                exitFailure
 
 ------------------------------------------------------------------------
 
