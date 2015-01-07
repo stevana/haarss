@@ -119,7 +119,11 @@ setupReactive cfg vty initModel eEvent tid = do
       cmd e _ Normal | key 'D' == e       = normal RemoveFeed ()
       cmd e m Normal | key 'a' == e &&
                        browsingFeeds m    = input  OpenPrompt AddFeed
-      cmd e _ Normal | key '/'  == e      = input  OpenPrompt SearchPrompt
+      cmd e m Normal | key 'P' == e &&
+                       browsingFeeds m    = normal Rearrange Up
+      cmd e m Normal | key 'N' == e &&
+                       browsingFeeds m    = normal Rearrange Down
+      cmd e _ Normal | key '/' == e       = input  OpenPrompt SearchPrompt
       cmd e _ Normal | key '\t' == e      = input  OpenPrompt SearchPrompt
       cmd _ _ Normal                      = (Nothing, Normal)
 
@@ -166,6 +170,7 @@ setupReactive cfg vty initModel eEvent tid = do
           resp ClosePrompt   () = return ()
           resp Quit          fs = throwTo tid $ SaveModel fs
           resp RemoveFeed    () = return ()
+          resp Rearrange     _  = return ()
 
     let update :: Op o -> Cmd o -> Resp o -> Model -> Model
         update Move          d   ()  m = move d m
@@ -186,7 +191,9 @@ setupReactive cfg vty initModel eEvent tid = do
           _                      -> m'
           where
           m' = m & prompt .~ Nothing
-        update RemoveFeed    ()  ()  m = removeFeed m
+        update RemoveFeed    ()   () m = removeFeed m
+        update Rearrange     Up   () m = rearrangeUpModel m
+        update Rearrange     Down () m = rearrangeDownModel m
 
     let feedback :: Feedback -> Model -> Model
         feedback (Downloading n) m = m & downloading .~ n

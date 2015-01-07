@@ -304,6 +304,12 @@ addFeed url m = m & feeds %~ add f
 removeFeed :: Model -> Model
 removeFeed m = m & feeds %~ remove
 
+rearrangeUpModel :: Model -> Model
+rearrangeUpModel m = m & feeds %~ rearrangeUp
+
+rearrangeDownModel :: Model -> Model
+rearrangeDownModel m = m & feeds %~ rearrangeDown
+
 ------------------------------------------------------------------------
 
 -- XXX: Move to Model.Serialise, add writeModel

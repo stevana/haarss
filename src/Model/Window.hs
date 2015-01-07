@@ -33,6 +33,9 @@ module Model.Window
   , resize
   , resize'
 
+  , rearrangeUp
+  , rearrangeDown
+
   , findFirst
   )
   where
@@ -101,13 +104,11 @@ instance (Arbitrary a, Arbitrary b) => Arbitrary (Window' a b) where
     return $ Window as ps y ns bs
 
   shrink (Window as ps y ns bs) =
-    [ Window as' ps' y' ns' bs'
-    | as' <- shrinkSeq shrink as
-    , ps' <- shrinkSeq shrink ps
-    , y'  <- shrink y
-    , ns' <- shrinkSeq shrink ns
-    , bs' <- shrinkSeq shrink bs
-    ]
+    [ Window as' ps  y  ns  bs  | as' <- shrinkSeq shrink as ] ++
+    [ Window as  ps' y  ns  bs  | ps' <- shrinkSeq shrink ps ] ++
+    [ Window as  ps  y' ns  bs  | y'  <- shrink y ] ++
+    [ Window as  ps  y  ns' bs  | ns' <- shrinkSeq shrink ns ] ++
+    [ Window as  ps  y  ns  bs' | bs' <- shrinkSeq shrink bs ]
     where
     shrinkSeq :: (a -> [a]) -> Seq a -> [Seq a]
     shrinkSeq f = map fromList . shrinkList f . toList
@@ -135,11 +136,20 @@ closeWindow' :: (b -> a) -> Window' a b -> [a]
 closeWindow' g = closeWindow . fmap g
 
 ------------------------------------------------------------------------
--- * Auxiliary functions
+-- * Queries
 
 -- | The size of visible part of the window.
 size :: Window' a b -> Int
 size w = w^.prev.to length + 1 + w^.next.to length
+
+canMoveDown :: Window a -> Bool
+canMoveDown w = w^.next.to length + w^.below.to length > 0
+
+canMoveUp :: Window a -> Bool
+canMoveUp w = w^.above.to length + w^.prev.to length > 0
+
+------------------------------------------------------------------------
+-- * Adding and removing
 
 add :: a -> Window a -> Window a
 add x w = resize (size w) $
@@ -347,11 +357,44 @@ prop_resizeSize (Positive i) (Positive j) (NonEmpty xs) ds =
   w = move ds (makeWindow i xs)
 
 ------------------------------------------------------------------------
+-- * Rearrangement
+
+flipDown :: Window a -> Window a
+flipDown (Window as ps x (viewl -> n :< ns) bs)                 =
+          Window as ps n (x <| ns)          bs
+flipDown (Window as ps x (viewl -> EmptyL)  (viewl -> b :< bs)) =
+          Window as ps b empty              (x <| bs)
+flipDown w                                                      = w
+
+flipUp :: Window a -> Window a
+flipUp (Window as                 (viewr -> ps :> p) x ns bs) =
+        Window as                 (ps |> x)          p ns bs
+flipUp (Window (viewr -> as :> a) (viewr -> EmptyR)  x ns bs) =
+        Window (as |> x)          empty              a ns bs
+flipUp w                                                      = w
+
+rearrangeDown :: Window a -> Window a
+rearrangeDown w | canMoveDown w = flipUp (down w)
+                | otherwise     = w
+
+rearrangeUp :: Window a -> Window a
+rearrangeUp w | canMoveUp w = flipDown (up w)
+              | otherwise   = w
+
+prop_rearrangeDown :: Window Int -> Property
+prop_rearrangeDown w = w^.next.to length > 0 ==>
+  rearrangeUp (rearrangeDown w) == w
+
+prop_rearrangeUp :: Window Int -> Property
+prop_rearrangeUp w = w^.prev.to length > 0 ==>
+  rearrangeDown (rearrangeUp w) == w
+
+------------------------------------------------------------------------
 -- * Search
 
 findFirst :: Eq a => (a -> Bool) -> Window a -> Window a
-findFirst p w | down w == w = w
-              | otherwise   = go (down w)
+findFirst p w | canMoveDown w = go (down w)
+              | otherwise     = w
   where
   go w' | w'^.focus.to p  = w'
         | down w' == w'   = w

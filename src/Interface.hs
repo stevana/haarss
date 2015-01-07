@@ -25,6 +25,7 @@ data Op'
   | CancelPrompt'
   | ClosePrompt'
   | RemoveFeed'
+  | Rearrange'
   | Search'
   | Resize'
   | Quit'
@@ -41,6 +42,7 @@ data Op :: Op' -> * where
   CancelPrompt   :: Op CancelPrompt'
   ClosePrompt    :: Op ClosePrompt'
   RemoveFeed     :: Op RemoveFeed'
+  Rearrange      :: Op Rearrange'
   Search         :: Op Search'
   Resize         :: Op Resize'
   Quit           :: Op Quit'
@@ -73,6 +75,7 @@ type family Cmd (o :: Op') :: * where
   Cmd 'CancelPrompt'   = ()
   Cmd 'ClosePrompt'    = ()
   Cmd 'RemoveFeed'     = ()
+  Cmd 'Rearrange'      = Dir
   Cmd 'Search'         = ()
   Cmd 'Resize'         = ()
   Cmd 'Quit'           = [AnnFeed]
@@ -91,6 +94,7 @@ type family Resp (o :: Op') :: * where
   Resp 'CancelPrompt'   = ()
   Resp 'ClosePrompt'    = ()
   Resp 'RemoveFeed'     = ()
+  Resp 'Rearrange'      = ()
   Resp 'Search'         = ()
   Resp 'Resize'         = ()
   Resp 'Quit'           = ()
