@@ -36,13 +36,13 @@ import           View
 
 ------------------------------------------------------------------------
 
-data SaveModel = SaveModel [AnnFeed]
+data Save = Save [AnnFeed]
   deriving (Typeable)
 
-instance Show SaveModel where
-  show _ = "SaveModel"
+instance Show Save where
+  show _ = "Save"
 
-instance Exception SaveModel where
+instance Exception Save where
 
 ------------------------------------------------------------------------
 
@@ -58,7 +58,7 @@ main = do
   sync $ setupReactive cfg vty model eEvent tid
 
   forever (Vty.nextEvent vty >>= sync . pushEvent)
-    `catches` [ Handler (\(SaveModel fs) -> do
+    `catches` [ Handler (\(Save fs) -> do
                   Vty.shutdown vty
                   modelPath <- getModelPath
                   BS.writeFile modelPath $ encode fs
@@ -166,7 +166,7 @@ setupReactive cfg vty initModel eEvent tid = do
           resp DelPrompt     () = return ()
           resp CancelPrompt  () = return ()
           resp ClosePrompt   () = return ()
-          resp Quit          fs = throwTo tid $ SaveModel fs
+          resp Quit          fs = throwTo tid $ Save fs
           resp RemoveFeed    () = return ()
           resp Rearrange     _  = return ()
 
