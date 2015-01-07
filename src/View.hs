@@ -56,18 +56,18 @@ render m sz = vertCat
 drawModel :: Model -> DisplayRegion -> Image
 drawModel m (w, h) = case m^.browsing.focus of
 
-  TheFeed _         -> drawWin (m^.feeds)
-                               (feedImage w defAttr)
-                               (feedImage w standoutAttr)
+  TheFeed _      -> drawWin (m^.feeds)
+                            (feedImage w defAttr)
+                            (feedImage w standoutAttr)
 
-  TheItems f is     -> vertCat
+  TheItems f is  -> vertCat
     [ attributed boldAttr (desc f^.be "")
     , separator
-    , drawWin is (itemImage defAttr boldAttr h)
-                 (itemImage standoutAttr standoutBoldAttr h)
+    , drawWin is (itemImage defAttr boldAttr w)
+                 (itemImage standoutAttr standoutBoldAttr w)
     ]
 
-  TheText  f is s -> vertCat
+  TheText f is s -> vertCat
     [ attributed boldAttr (desc f^.be "")
     , separator
     , attributed defAttr
@@ -137,9 +137,9 @@ feedImage w attr f = horizCat
       show . length . filter (not._isRead))
 
 itemImage :: Attr -> Attr -> Int -> AnnItem -> Image
-itemImage r n h i = horizCat
+itemImage r n w i = horizCat
   [ attributed attr (i^.item.itemTitle.be "no title")
-  , charFill r ' '  h 1
+  , charFill r ' '  w 1
   ]
   where
   attr :: Attr
