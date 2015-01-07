@@ -100,6 +100,18 @@ instance (Arbitrary a, Arbitrary b) => Arbitrary (Window' a b) where
     bs <- fromList <$> arbitrary
     return $ Window as ps y ns bs
 
+  shrink (Window as ps y ns bs) =
+    [ Window as' ps' y' ns' bs'
+    | as' <- shrinkSeq shrink as
+    , ps' <- shrinkSeq shrink ps
+    , y'  <- shrink y
+    , ns' <- shrinkSeq shrink ns
+    , bs' <- shrinkSeq shrink bs
+    ]
+    where
+    shrinkSeq :: (a -> [a]) -> Seq a -> [Seq a]
+    shrinkSeq f = map fromList . shrinkList f . toList
+
 ------------------------------------------------------------------------
 -- * Introduction
 
@@ -131,7 +143,7 @@ size w = w^.prev.to length + 1 + w^.next.to length
 
 add :: a -> Window a -> Window a
 add x w = resize (size w) $
-  w & next  %~ (w^.focus <|)
+  w & prev  %~ (|> w^.focus)
     & focus .~ x
 
 remove :: Window a -> Window a
@@ -153,7 +165,8 @@ remove w@(Window (viewr -> EmptyR)  (viewr -> EmptyR) _
   = w
 
 prop_addRemove :: Int -> Window Int -> Bool
-prop_addRemove x w = remove (add x w) == w
+prop_addRemove x w =
+  closeWindow (remove (add x w)) == closeWindow w
 
 ------------------------------------------------------------------------
 -- * Movement
