@@ -72,18 +72,6 @@ main = do
 
 ------------------------------------------------------------------------
 
-key  c    = Vty.EvKey (Vty.KChar c) []
-ctrl c    = Vty.EvKey (Vty.KChar c) [Vty.MCtrl]
-enter     = Vty.EvKey Vty.KEnter []
-backspace = Vty.EvKey Vty.KBS    []
-esc       = Vty.EvKey Vty.KEsc   []
-
-isKey (Vty.EvKey (Vty.KChar _) []) = True
-isKey _                            = False
-
-getKey (Vty.EvKey (Vty.KChar c) []) = c
-getKey _                            = error "getKey"
-
 setupReactive :: Config -> Vty.Vty -> Model -> Event Vty.Event ->
                  ThreadId -> Reactive ()
 setupReactive cfg vty initModel eEvent tid = do
@@ -91,47 +79,6 @@ setupReactive cfg vty initModel eEvent tid = do
   (eFeedback, pushFeedback) <- newEvent
                             :: Reactive (Event Feedback,
                                          Feedback -> Reactive ())
-
-  let normal, input :: Op o -> Cmd o -> (Maybe ExCmd, Mode)
-      normal o c = (Just $ ExCmd o c, Normal)
-      input  o c = (Just $ ExCmd o c, Input)
-
-  let cmd :: Vty.Event -> Model -> Mode -> (Maybe ExCmd, Mode)
-      cmd e m Normal | m^.downloading > 0 = (Nothing, Normal)
-      cmd e _ Normal | key 'K' == e       = normal Move Top
-      cmd e _ Normal | key 'k' == e       = normal Move Up
-      cmd e _ Normal | key 'j' == e       = normal Move Down
-      cmd e _ Normal | key 'J' == e       = normal Move Bot
-      cmd e _ Normal | key 'l' == e       = normal Move In
-      cmd e _ Normal | enter   == e       = normal Move In
-      cmd e m Normal | key 'q' == e       = if browsingFeeds m
-                                            then normal Quit
-                                                (m^.feeds.to closeWindow)
-                                            else normal Move Out
-      cmd e m Normal | key 'R' == e       = normal UpdateFeeds
-                                                  [getFeedUrl m]
-      cmd e _ Normal | key 'r' == e       = normal UpdateFeeds (cfg^.urls)
-      cmd e m Normal | key 'o' == e       = normal OpenUrl (getItemUrl m)
-      cmd e _ Normal | key 'm' == e       = normal MarkAllAsRead ()
-      cmd e _ Normal | key 'M' == e       = normal MarkAsRead ()
-      cmd e _ Normal | key 'D' == e       = normal RemoveFeed ()
-      cmd e m Normal | key 'a' == e &&
-                       browsingFeeds m    = input  OpenPrompt AddFeed
-      cmd e m Normal | key 'P' == e &&
-                       browsingFeeds m    = normal Rearrange Up
-      cmd e m Normal | key 'N' == e &&
-                       browsingFeeds m    = normal Rearrange Down
-      cmd e _ Normal | key '/' == e       = input  OpenPrompt SearchPrompt
-      cmd e _ Normal | key '\t' == e      = input  OpenPrompt SearchPrompt
-      cmd _ _ Normal                      = (Nothing, Normal)
-
-      cmd e m Input  | isKey e             = input  PutPrompt (getKey e)
-      cmd e m Input  | backspace == e      = input  DelPrompt ()
-      cmd e m Input  | esc       == e      = normal CancelPrompt ()
-      cmd e m Input  | enter     == e      = normal ClosePrompt ()
-      cmd e m Input  | ctrl 'g'  == e      = normal CancelPrompt ()
-      cmd _ m Input                        = (Nothing, Input)
-
   rec
     eCmd <- filterJust <$>
               collectE (uncurry cmd) Normal (snapshot (,) eEvent bModel)
@@ -151,13 +98,11 @@ setupReactive cfg vty initModel eEvent tid = do
           resp OpenUrl       mu = case mu of
             Nothing  -> return ()
             Just url -> do
-
               -- We use createProcess, rather than say rawSystem, so we
               -- can redirect stderr and thus avoid having the terminal
               -- flooded by warnings from the browser.
               _ <- createProcess (proc (cfg^.browser) [url])
                      { std_err = CreatePipe }
-
               return ()
           resp MarkAllAsRead () = return ()
           resp MarkAsRead    () = return ()
@@ -169,33 +114,8 @@ setupReactive cfg vty initModel eEvent tid = do
           resp Quit          fs = throwTo tid $ Save fs
           resp RemoveFeed    () = return ()
           resp Rearrange     _  = return ()
-
-    let update :: Op o -> Cmd o -> Resp o -> Model -> Model
-        update Move          d   ()  m = move d m
-        update UpdateFeeds   _   tfs m = feedsDownloaded tfs m
-        update OpenUrl       _   ()  m = m
-        update MarkAllAsRead ()  ()  m = markAllAsRead m
-        update MarkAsRead    ()  ()  m = markAsRead m
-        update OpenPrompt    p   ()  m = m & prompt ?~ (p, "")
-        update PutPrompt     c   ()  m = m & prompt._Just._2 %~ (++ [c])
-        update DelPrompt     ()  ()  m = m & prompt._Just._2 %~
-                                               \s -> if null s
-                                                     then ""
-                                                     else init s
-        update CancelPrompt  ()  ()  m = m & prompt .~ Nothing
-        update ClosePrompt   ()  ()  m = case m^.prompt of
-          Just (SearchPrompt, s) -> search (T.pack s) m'
-          Just (AddFeed,      s) -> addFeed s m'
-          _                      -> m'
-          where
-          m' = m & prompt .~ Nothing
-        update RemoveFeed    ()   () m = removeFeed m
-        update Rearrange     Up   () m = rearrangeUpModel m
-        update Rearrange     Down () m = rearrangeDownModel m
-
-    let feedback :: Feedback -> Model -> Model
-        feedback (Downloading n) m = m & downloading .~ n
-        feedback FeedDownloaded  m = m & downloading -~ 1
+          resp Search        _  = return ()
+          resp Resize        _  = return ()
 
     bModel <- accum initModel $ mconcat
                 [ (\(ExResp o p a) -> update o p a) <$> eResp
@@ -206,3 +126,64 @@ setupReactive cfg vty initModel eEvent tid = do
   _ <- listen (value bModel) (viewModel vty)
 
   return ()
+
+------------------------------------------------------------------------
+
+cmd :: Vty.Event -> Model -> Mode -> (Maybe ExCmd, Mode)
+cmd e m Normal | m^.downloading > 0 = (Nothing, Normal)
+cmd e _ Normal | key 'K'   == e     = normal Move Top
+cmd e _ Normal | key 'k'   == e     = normal Move Up
+cmd e _ Normal | key 'j'   == e     = normal Move Down
+cmd e _ Normal | key 'J'   == e     = normal Move Bot
+cmd e _ Normal | key 'l'   == e     = normal Move In
+cmd e _ Normal | enter     == e     = normal Move In
+cmd e m Normal | key 'q'   == e     = if browsingFeeds m
+                                      then normal Quit
+                                             (m^.feeds.to closeWindow)
+                                      else normal Move Out
+cmd e m Normal | key 'R'   == e     = normal UpdateFeeds
+                                               [getFeedUrl m]
+cmd e m Normal | key 'r'   == e     = normal UpdateFeeds (getFeedUrls m)
+cmd e m Normal | key 'o'   == e     = normal OpenUrl (getItemUrl m)
+cmd e _ Normal | key 'm'   == e     = normal MarkAllAsRead ()
+cmd e _ Normal | key 'M'   == e     = normal MarkAsRead ()
+cmd e _ Normal | key 'D'   == e     = normal RemoveFeed ()
+cmd e m Normal | key 'a'   == e &&
+                 browsingFeeds m    = input  OpenPrompt AddFeed
+cmd e m Normal | key 'P'   == e &&
+                 browsingFeeds m    = normal Rearrange Up
+cmd e m Normal | key 'N'   == e &&
+                 browsingFeeds m    = normal Rearrange Down
+cmd e _ Normal | key '/'   == e     = input  OpenPrompt SearchPrompt
+cmd e _ Normal | key '\t'  == e     = input  OpenPrompt SearchPrompt
+cmd _ _ Normal                      = (Nothing, Normal)
+
+cmd e m Input  | isKey e            = input  PutPrompt (getKey e)
+cmd e m Input  | backspace == e     = input  DelPrompt ()
+cmd e m Input  | esc       == e     = normal CancelPrompt ()
+cmd e m Input  | enter     == e     = normal ClosePrompt ()
+cmd e m Input  | ctrl 'g'  == e     = normal CancelPrompt ()
+cmd _ m Input                       = (Nothing, Input)
+
+------------------------------------------------------------------------
+
+normal, input :: Op o -> Cmd o -> (Maybe ExCmd, Mode)
+normal o c = (Just $ ExCmd o c, Normal)
+input  o c = (Just $ ExCmd o c, Input)
+
+key, ctrl :: Char -> Vty.Event
+key  c    = Vty.EvKey (Vty.KChar c) []
+ctrl c    = Vty.EvKey (Vty.KChar c) [Vty.MCtrl]
+
+enter, backspace, esc :: Vty.Event
+enter     = Vty.EvKey Vty.KEnter []
+backspace = Vty.EvKey Vty.KBS    []
+esc       = Vty.EvKey Vty.KEsc   []
+
+isKey :: Vty.Event -> Bool
+isKey (Vty.EvKey (Vty.KChar _) []) = True
+isKey _                            = False
+
+getKey :: Vty.Event -> Char
+getKey (Vty.EvKey (Vty.KChar c) []) = c
+getKey _                            = error "getKey"

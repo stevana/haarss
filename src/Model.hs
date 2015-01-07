@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFoldable    #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
@@ -247,14 +248,46 @@ browsingItems m = m^.browsing.focus & has _TheItems
 getFeedUrl :: Model -> String
 getFeedUrl m = m^.feeds.focus.feed.feedHome
 
+getFeedUrls :: Model -> [String]
+getFeedUrls m = m^.feeds.to closeWindow & mapped %~ \f -> f^.feed.feedHome
+
 getItemUrl :: Model -> Maybe String
 getItemUrl m = m^.browsing.focus.annItems.focus.item.itemLink
 
 ------------------------------------------------------------------------
 
--- XXX: This won't work for the overview feed.
-markAsRead :: Model -> Model
-markAsRead m = m & browsing.focus.annItems.focus.isRead %~ not
+update :: Op o -> Cmd o -> Resp o -> Model -> Model
+update Move          d   ()  m = move d m
+update UpdateFeeds   _   tfs m = feedsDownloaded tfs m
+update OpenUrl       _   ()  m = m
+update MarkAllAsRead ()  ()  m = markAllAsRead m
+update MarkAsRead    ()  ()  m =
+  -- XXX: This won't work for the overview feed.
+  m & browsing.focus.annItems.focus.isRead %~ not
+update OpenPrompt    p   ()  m = m & prompt ?~ (p, "")
+update PutPrompt     c   ()  m = m & prompt._Just._2 %~ (++ [c])
+update DelPrompt     ()  ()  m = m & prompt._Just._2 %~
+                                       \s -> if null s
+                                             then ""
+                                             else init s
+update CancelPrompt  ()  ()  m = m & prompt .~ Nothing
+update ClosePrompt   ()  ()  m = case m^.prompt of
+  Just (SearchPrompt, s) -> search (T.pack s) m'
+  Just (AddFeed,      s) -> addFeed s m'
+  _                      -> m'
+  where
+  m' = m & prompt .~ Nothing
+update RemoveFeed    ()   () m = m & feeds %~ remove
+update Rearrange     Up   () m = m & feeds %~ rearrangeUp
+update Rearrange     Down () m = m & feeds %~ rearrangeDown
+
+------------------------------------------------------------------------
+
+feedback :: Feedback -> Model -> Model
+feedback (Downloading n) m = m & downloading .~ n
+feedback FeedDownloaded  m = m & downloading -~ 1
+
+------------------------------------------------------------------------
 
 -- XXX: Magic string...
 markAllAsRead :: Model -> Model
@@ -300,15 +333,6 @@ addFeed url m = m & feeds %~ add f
   f :: AnnFeed
   f = newEmptyAnnFeed & feed.feedTitle ?~ T.pack url
                       & feed.feedHome  .~ url
-
-removeFeed :: Model -> Model
-removeFeed m = m & feeds %~ remove
-
-rearrangeUpModel :: Model -> Model
-rearrangeUpModel m = m & feeds %~ rearrangeUp
-
-rearrangeDownModel :: Model -> Model
-rearrangeDownModel m = m & feeds %~ rearrangeDown
 
 ------------------------------------------------------------------------
 

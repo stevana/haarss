@@ -18,7 +18,7 @@ import           Feed.Annotated
 import           Feed.Feed
 import           Fetching.History
 import           Interface
-import           Model
+import           Model hiding (update)
 import           Model.Window
 
 ------------------------------------------------------------------------
