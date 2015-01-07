@@ -53,7 +53,7 @@ download1 url callback parser = do
 
 download :: [String] -> IO () -> (BS.ByteString -> Either String a) ->
             IO [(Maybe a, History)]
-download urls  callback parser = parallel $
+download urls callback parser = parallel $
   flip map urls $ \url -> download1 url callback parser
 
 feedParser :: BS.ByteString -> Either String Feed
