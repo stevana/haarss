@@ -102,18 +102,18 @@ failedImage :: Attr -> AnnFeed -> Image
 failedImage attr f = char attr $ case f^.history of
   []                                                       -> ' '
   Success _                                            : _ -> ' '
+  hs | length hs >= 10 && all isFailure hs                 -> '☠'
   Failure _ (DownloadFailure (StatusCodeException' s)) : _
-    | s == movedPermanently301                             -> '☈'
+    | s == movedPermanently301                             -> 'M'
     | s == notModified304                                  -> ' '
-    | s == notFound404                                     -> '✗'
-    | s == forbidden403                                    -> '✋'
-    | s == requestTimeout408                               -> '⌚'
-    | s == internalServerError500                          -> '⚠'
-    | otherwise                                            -> '⚡'
-  Failure _ (DownloadFailure OtherException)           : _ -> '¿'
-  Failure _ (ParseFailure _)                           : _ -> '✂'
+    | s == notFound404                                     -> 'X'
+    | s == forbidden403                                    -> 'F'
+    | s == requestTimeout408                               -> 'T'
+    | s == internalServerError500                          -> 'I'
+    | otherwise                                            -> '!'
+  Failure _ (DownloadFailure OtherException)           : _ -> '?'
+  Failure _ (ParseFailure _)                           : _ -> 'P'
   Failure _ TimeoutFailure                             : _ -> '⌛'
-  hs | length hs == 10 && all isFailure hs                 -> '☠'
   Failure _ UnknownFailure                             : _ -> '?'
   where
   isFailure (Failure _ _) = True
