@@ -7,7 +7,12 @@ module Feed.Annotated where
 
 import           Control.Applicative
 import           Control.Lens
+import           Data.Hashable
 import           Data.List           (find)
+import           Data.Map            (Map)
+import qualified Data.Map            as M
+import           Data.IntMap         (IntMap)
+import qualified Data.IntMap         as IM
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Serialize
@@ -60,10 +65,15 @@ defAnnFeed f = newEmptyAnnFeed
 instance Show AnnFeed where
   show f = f^.feed.feedTitle.to (maybe "(no title)" T.unpack)
 
--- XXX: Needs to be more flexible in the future; can't assume that the
--- old and new feeds will be as many and positioned the same...
+-- (Multiples of same feed will cause problems.)
 mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
-mergeFeeds = zipWith merge
+mergeFeeds old new = flip map new $ \n ->
+  case M.lookup (n^.feed.feedHome) m of
+    Nothing -> n
+    Just o  -> merge o n
+  where
+  m :: Map URL AnnFeed
+  m = M.fromList $ map (\o -> (o^.feed.feedHome, o)) old
 
 merge :: AnnFeed -> AnnFeed -> AnnFeed
 merge old new
@@ -78,16 +88,19 @@ merge old new
   where
   prune = take 10
 
--- XXX: O(new^old)...
 mergeItems :: [AnnItem] -> [AnnItem] -> [AnnItem]
-mergeItems old new = map (\n -> keepOldAnn (n^.item)) new
+mergeItems old new = flip map new $ \n ->
+  case IM.lookup (hashItem n) m of
+    Nothing -> n
+    Just o  -> n & isRead .~ o^.isRead
   where
-  keepOldAnn :: Item -> AnnItem
-  keepOldAnn n =
-    -- XXX: Compare only (hashes of) titles and descriptions?
-    case find (\o -> n == o^.item) old of
-      Nothing -> AnnItem n False
-      Just o  -> AnnItem n (o^.isRead)
+  hashItem :: AnnItem -> Int
+  hashItem i = hash (i^.item.itemTitle) `hashWithSalt`
+               hash (i^.item.itemDescription)
+
+  m :: IntMap AnnItem
+  m = IM.fromList $ map (\o -> (hashItem o, o)) old
+
 
 -- | The function for merging items is idempotent.
 prop_mergeItemsIdempotent :: [AnnItem] -> Bool
