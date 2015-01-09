@@ -1,48 +1,43 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Config (Config, urls, browser, readConfig) where
+module Config where
 
-import           Control.Lens     (makeLenses)
+import           Control.Lens
 import           Data.Char        (isSpace)
-import           System.Directory (createDirectoryIfMissing, doesFileExist)
-import           System.FilePath  (takeDirectory)
+import           Data.Text.Lens
+import           System.Directory (createDirectoryIfMissing, doesFileExist,
+                                   getAppUserDataDirectory)
+import           System.FilePath  (takeDirectory, (</>))
 
-import           Constants
+import           Feed.Annotated
+import           Feed.Feed
 
 ------------------------------------------------------------------------
 -- * Types
 
--- Write config to file on exit? Lens. Parser for config files?
 data Config = Config
   { _browser :: String
-  , _urls    :: [String]  -- Should probably contain more things, like
-                          -- nick name for feed, filter..
-
-  -- , shortcuts :: M.Map Vty.Key Command
-  -- , colours   :: M.Map Widget Colour
-
-  -- , language :: [Lang] -- one for each feed to mine the body of the
-                          -- text?!
+  , _entries :: [(Maybe String, String)]
   }
   deriving (Show, Read)
 
 makeLenses ''Config
 
+------------------------------------------------------------------------
+
 defaultConfig :: Config
 defaultConfig = Config
   { _browser = "firefox"
-  , _urls    = [haarss]
+  , _entries = [ (Just "haarss github feed", haarss) ]
   }
   where
-  haarss   = "https://github.com/stevana/haarss/commits/master.atom"
+  haarss = "https://github.com/stevana/haarss/commits/master.atom"
 
 ------------------------------------------------------------------------
--- * Helpers
 
-readConfig :: IO Config
-readConfig = do
-
-  configPath <- getConfigPath
+loadConfig :: IO Config
+loadConfig = do
+  configPath <- getAppUserDataDirectory $ "haarss" </> "config"
   exists     <- doesFileExist configPath
 
   if not exists
@@ -53,13 +48,36 @@ readConfig = do
     else do
       str <- readFile configPath
       case readMaybe str of
-        Nothing  -> error "readConfig: failed to parse config."
+        Nothing  -> error "loadConfig: failed to parse config."
         Just cfg -> return cfg
 
   where
-  -- XXX: Also used by readSavedModel, won't be the case if config has a
-  -- proper parser...
   readMaybe :: Read a => String -> Maybe a
   readMaybe s = case reads s of
                 [(x, rest)] | all isSpace rest -> Just x
                 _                              -> Nothing
+
+updateConfig :: Config -> [AnnFeed] -> IO ()
+updateConfig cfg fs = do
+  configPath <- getAppUserDataDirectory $ "haarss" </> "config"
+  writeFile configPath $ ppConfig $ cfg & entries .~
+    (flip map fs $ \f -> (f^.alias.traverse.unpacked.to Just,
+                          f^.feed.feedHome.unpacked))
+
+  where
+  -- XXX: Use ansi-wl-pprint package?
+  ppConfig :: Config -> String
+  ppConfig c = unlines
+    [ "Config"
+    , "  { _browser = " ++ c^.browser.to show
+    , "  , _entries = "
+    , "    " ++ ppList (c^.entries)
+    , "  }"
+    ]
+    where
+    ppList :: Show a => [a] -> String
+    ppList []       = "[]"
+    ppList (x : xs) = "[ " ++ show x ++ "\n" ++ go xs
+      where
+      go []       = "    ]"
+      go (x : xs) = "    , " ++ show x ++ "\n" ++ go xs

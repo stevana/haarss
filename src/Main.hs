@@ -5,28 +5,21 @@
 
 module Main where
 
-import qualified Data.ByteString     as BS
-import           Data.Monoid
-import           Data.Serialize
-import qualified Data.Text           as T
-import           Data.Time
-import           Data.Typeable
-
 import           Control.Applicative
 import           Control.Concurrent
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad
+import           Data.Monoid
+import           Data.Time
+import           Data.Typeable
+import           FRP.Sodium
+import           FRP.Sodium.IO
+import qualified Graphics.Vty        as Vty
 import           System.Exit
 import           System.Process
 
-import qualified Graphics.Vty        as Vty
-
-import           FRP.Sodium
-import           FRP.Sodium.IO
-
 import           Config
-import           Constants
 import           Feed.Annotated
 import           Fetching
 import           Interface
@@ -48,10 +41,10 @@ instance Exception Save where
 
 main :: IO ()
 main = do
-  cfg                 <- readConfig
+  cfg                 <- loadConfig
   vty                 <- Vty.mkVty =<< Vty.standardIOConfig
   sz                  <- Vty.displayBounds $ Vty.outputIface vty
-  model               <- resizeModel sz <$> readSavedModel cfg
+  model               <- resizeModel sz <$> loadModel cfg
   (eEvent, pushEvent) <- sync newEvent
   tid                 <- myThreadId
 
@@ -60,8 +53,8 @@ main = do
   forever (Vty.nextEvent vty >>= sync . pushEvent)
     `catches` [ Handler (\(Save fs) -> do
                   Vty.shutdown vty
-                  modelPath <- getModelPath
-                  BS.writeFile modelPath $ encode fs
+                  updateConfig cfg fs
+                  saveModel fs
                   exitSuccess)
               , Handler (\e              -> do
                   Vty.shutdown vty
@@ -96,12 +89,12 @@ setupReactive cfg vty initModel eEvent tid = do
             return (time, fs)
           resp Move          _  = return ()
           resp OpenUrl       mu = case mu of
-            Nothing  -> return ()
-            Just url -> do
+            Nothing -> return ()
+            Just u  -> do
               -- We use createProcess, rather than say rawSystem, so we
               -- can redirect stderr and thus avoid having the terminal
               -- flooded by warnings from the browser.
-              _ <- createProcess (proc (cfg^.browser) [url])
+              _ <- createProcess (proc (cfg^.browser) [u])
                      { std_err = CreatePipe }
               return ()
           resp MarkAllAsRead () = return ()
@@ -148,6 +141,8 @@ cmd e m Normal | key 'o'   == e     = normal OpenUrl (getItemUrl m)
 cmd e _ Normal | key 'm'   == e     = normal MarkAllAsRead ()
 cmd e _ Normal | key 'M'   == e     = normal MarkAsRead ()
 cmd e _ Normal | key 'D'   == e     = normal RemoveFeed ()
+cmd e m Normal | key 'c'   == e &&
+                 browsingFeeds m    = input  OpenPrompt RenameFeed
 cmd e m Normal | key 'a'   == e &&
                  browsingFeeds m    = input  OpenPrompt AddFeed
 cmd e m Normal | key 'P'   == e &&

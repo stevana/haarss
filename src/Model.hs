@@ -24,9 +24,9 @@ import           Data.Time
 import           Graphics.Vty.Prelude
 import           System.Directory
 import           System.Locale
+import           System.FilePath
 
 import           Config
-import           Constants
 import           Feed.Annotated
 import           Feed.Feed
 import           Interface
@@ -189,10 +189,10 @@ initialModel :: UTCTime -> Config -> Model
 initialModel time cfg = makeModel (addOverviewFeed time fs)
   where
   fs :: [AnnFeed]
-  fs = cfg^.urls & mapped %~ \url -> defAnnFeed $
+  fs = cfg^.entries & mapped %~ \(_, u) -> defAnnFeed $
          newEmptyFeed AtomKind
-           & feedTitle      ?~ T.pack url
-           & feedHome       .~ url
+           & feedTitle      ?~ T.pack u
+           & feedHome       .~ u
            & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
                                  rfc822DateFormat time)
 
@@ -248,8 +248,10 @@ browsingItems m = m^.browsing.focus & has _TheItems
 getFeedUrl :: Model -> String
 getFeedUrl m = m^.feeds.focus.feed.feedHome
 
+-- XXX: Magic drop 1...
 getFeedUrls :: Model -> [String]
-getFeedUrls m = m^.feeds.to closeWindow & mapped %~ \f -> f^.feed.feedHome
+getFeedUrls m = m^.feeds.to closeWindow.to (drop 1) & mapped %~
+  \f -> f^.feed.feedHome
 
 getItemUrl :: Model -> Maybe String
 getItemUrl m = m^.browsing.focus.annItems.focus.item.itemLink
@@ -273,6 +275,7 @@ update DelPrompt     ()  ()  m = m & prompt._Just._2 %~
 update CancelPrompt  ()  ()  m = m & prompt .~ Nothing
 update ClosePrompt   ()  ()  m = case m^.prompt of
   Just (SearchPrompt, s) -> search (T.pack s) m'
+  Just (RenameFeed,   s) -> m' & browsing.focus.annFeed.alias ?~ T.pack s
   Just (AddFeed,      s) -> addFeed s m'
   _                      -> m'
   where
@@ -303,7 +306,8 @@ markAllAsRead m
   | otherwise = m & items.both.isRead .~ True
 
 feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
-feedsDownloaded (time, [f]) m =
+-- XXX: Overview feed specific...
+feedsDownloaded (time, [f]) m | m^.feeds.to (length . closeWindow) > 2 =
   -- XXX: The overview feeds should be update as well...
   m & feeds.focus %~ flip Feed.Annotated.merge f
 feedsDownloaded (time, fs)  m =
@@ -336,11 +340,9 @@ addFeed url m = m & feeds %~ add f
 
 ------------------------------------------------------------------------
 
--- XXX: Move to Model.Serialise, add writeModel
--- XXX: Use: getAppUserDataDirectory
-readSavedModel :: Config -> IO Model
-readSavedModel cfg = do
-  modelPath <- getModelPath
+loadModel :: Config -> IO Model
+loadModel cfg = do
+  modelPath <- getAppUserDataDirectory $ "haarss" </> "model"
   exists    <- doesFileExist modelPath
   time      <- getCurrentTime
 
@@ -349,5 +351,10 @@ readSavedModel cfg = do
     else do
       em <- decode <$> BS.readFile modelPath
       case em of
-        Left _  -> error "readSavedModel: failed to restore saved model."
+        Left _  -> error "loadModel: failed to restore saved model."
         Right m -> return m
+
+saveModel :: [AnnFeed] -> IO ()
+saveModel fs = do
+  modelPath <- getAppUserDataDirectory $ "haarss" </> "model"
+  BS.writeFile modelPath $ encode fs

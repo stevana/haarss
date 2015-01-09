@@ -39,6 +39,7 @@ instance Show AnnItem where
 
 data AnnFeed = AnnFeed
   { _feed    :: Feed' [AnnItem]
+  , _alias   :: Maybe Text
   , _history :: [History]
   }
   deriving (Eq, Generic)
@@ -48,6 +49,7 @@ makeLenses ''AnnFeed
 newEmptyAnnFeed :: AnnFeed
 newEmptyAnnFeed = AnnFeed
   { _feed    = newEmptyFeed AtomKind & feedItems.traverse %~ defAnnItem
+  , _alias   = Nothing
   , _history = []
   }
 
@@ -71,7 +73,8 @@ merge old new
   | otherwise
   = new & feed.feedItems .~ mergeItems (old^.feed.feedItems)
                                        (new^.feed.feedItems)
-        & history %~ \h -> prune (h ++ old^.history)
+        & alias          .~ old^.alias
+        & history        %~ \h -> prune (h ++ old^.history)
   where
   prune = take 10
 
@@ -137,7 +140,7 @@ instance Serialize AnnFeed  where
 instance Serialize AnnItem  where
 
 instance Arbitrary AnnFeed where
-  arbitrary = AnnFeed <$> arbitrary <*> arbitrary
+  arbitrary = AnnFeed <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary AnnItem where
   arbitrary = AnnItem <$> arbitrary <*> arbitrary

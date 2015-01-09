@@ -53,11 +53,12 @@ data Dir = Up | Down | In | Out | Top | Bot
 instance Arbitrary Dir where
   arbitrary = elements [Up, Down, In , Out, Top, Bot]
 
-data Prompt = AddFeed | SearchPrompt
+data Prompt = AddFeed | RenameFeed | SearchPrompt
   deriving Eq
 
 instance Show Prompt where
   show AddFeed      = "Add feed"
+  show RenameFeed   = "Rename feed to"
   show SearchPrompt = "Search for"
 
 instance Arbitrary Prompt where

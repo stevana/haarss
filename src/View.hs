@@ -129,7 +129,7 @@ feedImage w attr f = horizCat
   ]
   where
   title :: Text
-  title = f^.feed.feedTitle.be "no title"
+  title = (asumOf both (f^.alias, f^.feed.feedTitle))^.be "no title"
 
   unread :: Text
   unread = f^.feed.feedItems.to

@@ -24,7 +24,6 @@ import           Feed.Parser
 import           Fetching.History
 
 import qualified Config
-import           Constants
 
 ------------------------------------------------------------------------
 
@@ -76,7 +75,9 @@ downloadFeeds urls callback =
       & feedHome  .~ url
 
 ------------------------------------------------------------------------
+-- XXX: Debugging
 
+{-
 downloadDebug :: [String] -> IO ()
 downloadDebug urls = do
   dls <- download urls (return ()) feedParser
@@ -89,3 +90,4 @@ runTest = do
   cfgPath <- getConfigPath
   cfg <- read <$> readFile cfgPath
   downloadDebug (cfg^.Config.urls)
+-}
