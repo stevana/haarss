@@ -8,7 +8,6 @@ module Feed.Annotated where
 import           Control.Applicative
 import           Control.Lens
 import           Data.Hashable
-import           Data.List           (find)
 import           Data.Map            (Map)
 import qualified Data.Map            as M
 import           Data.IntMap         (IntMap)

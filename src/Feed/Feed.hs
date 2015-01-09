@@ -35,10 +35,10 @@ data Feed' is = Feed
   , _feedLastUpdate  :: Maybe Date
   , _feedItems       :: is
   }
-  deriving (Functor, Foldable, Traversable, Generic)
+  deriving (Eq, Functor, Foldable, Traversable, Generic)
 
 data FeedKind = AtomKind | RSS1Kind | RSS2Kind
-  deriving (Enum, Generic)
+  deriving (Eq, Enum, Generic)
 
 makeLenses ''Feed'
 
@@ -56,7 +56,7 @@ data Item = Item
   , _itemFeedLink    :: Maybe URL
   , _itemDescription :: Maybe Text
   }
-  deriving (Eq, Ord, Generic)
+  deriving (Eq, Show, Ord, Generic)
 
 makeLenses ''Item
 
@@ -72,9 +72,6 @@ addItem :: Item -> Feed -> Feed
 addItem item feed = feed & feedItems %~ cons item
 
 ------------------------------------------------------------------------
-
-deriving instance Eq a => Eq (Feed' a)
-deriving instance Eq FeedKind
 
 instance Serialize FeedKind where
 instance Serialize Item     where
@@ -95,5 +92,6 @@ instance Arbitrary a => Arbitrary (Feed' a) where
                    <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary Item where
-  arbitrary = Item <$> arbitrary <*> arbitrary <*> arbitrary <*>
-                       arbitrary <*> arbitrary
+  arbitrary = Item <$> fmap Just arbitrary <*> fmap Just arbitrary
+                   <*> fmap Just arbitrary <*> fmap Just arbitrary
+                   <*> fmap Just arbitrary
