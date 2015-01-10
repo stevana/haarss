@@ -8,10 +8,8 @@ module Feed.Annotated where
 import           Control.Applicative
 import           Control.Lens
 import           Data.Hashable
-import           Data.Map            (Map)
-import qualified Data.Map            as M
 import           Data.IntMap         (IntMap)
-import qualified Data.IntMap         as IM
+import qualified Data.IntMap         as M
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Serialize
@@ -67,12 +65,12 @@ instance Show AnnFeed where
 -- (Multiples of same feed will cause problems.)
 mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
 mergeFeeds old new = flip map new $ \n ->
-  case M.lookup (n^.feed.feedHome) m of
+  case M.lookup (hash (n^.feed.feedHome)) m of
     Nothing -> n
     Just o  -> merge o n
   where
-  m :: Map URL AnnFeed
-  m = M.fromList $ map (\o -> (o^.feed.feedHome, o)) old
+  m :: IntMap AnnFeed
+  m = M.fromList $ map (\o -> (hash (o^.feed.feedHome), o)) old
 
 merge :: AnnFeed -> AnnFeed -> AnnFeed
 merge old new
@@ -89,7 +87,7 @@ merge old new
 
 mergeItems :: [AnnItem] -> [AnnItem] -> [AnnItem]
 mergeItems old new = flip map new $ \n ->
-  case IM.lookup (hashItem n) m of
+  case M.lookup (hashItem n) m of
     Nothing -> n
     Just o  -> n & isRead .~ o^.isRead
   where
@@ -98,7 +96,7 @@ mergeItems old new = flip map new $ \n ->
                hash (i^.item.itemDescription)
 
   m :: IntMap AnnItem
-  m = IM.fromList $ map (\o -> (hashItem o, o)) old
+  m = M.fromList $ map (\o -> (hashItem o, o)) old
 
 
 -- | The function for merging items is idempotent.
