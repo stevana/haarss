@@ -48,7 +48,7 @@ main = do
   (eEvent, pushEvent) <- sync newEvent
   tid                 <- myThreadId
 
-  sync $ setupReactive cfg vty model eEvent tid
+  sync $ setupReactive cfg vty sz model eEvent tid
 
   forever (Vty.nextEvent vty >>= sync . pushEvent)
     `catches` [ Handler (\(Save fs) -> do
@@ -65,13 +65,20 @@ main = do
 
 ------------------------------------------------------------------------
 
-setupReactive :: Config -> Vty.Vty -> Model -> Event Vty.Event ->
-                 ThreadId -> Reactive ()
-setupReactive cfg vty initModel eEvent tid = do
+setupReactive :: Config -> Vty.Vty -> Vty.DisplayRegion -> Model ->
+                 Event Vty.Event -> ThreadId -> Reactive ()
+setupReactive cfg vty sz initModel eEvent tid = do
 
   (eFeedback, pushFeedback) <- newEvent
                             :: Reactive (Event Feedback,
                                          Feedback -> Reactive ())
+
+  eSize <- fmap updates $ hold sz $ filterJust $ fmap
+             (\e -> case e of
+                      Vty.EvResize h w -> Just (h, w)
+                      _                -> Nothing) eEvent
+        :: Reactive (Event Vty.DisplayRegion)
+
   rec
     eCmd <- filterJust <$>
               collectE (uncurry cmd) Normal (snapshot (,) eEvent bModel)
@@ -113,6 +120,7 @@ setupReactive cfg vty initModel eEvent tid = do
     bModel <- accum initModel $ mconcat
                 [ (\(ExResp o p a) -> update o p a) <$> eResp
                 , feedback                          <$> eFeedback
+                , resizeModel                       <$> eSize
                 ]
            :: Reactive (Behavior Model)
 

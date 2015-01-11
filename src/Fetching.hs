@@ -16,14 +16,15 @@ import           Network.HTTP.Client           (HttpException)
 import           Network.HTTP.Client.TLS       (tlsManagerSettings)
 import           Network.Wreq
 
+import           System.Directory
+import           System.FilePath
 import           System.Timeout
 
+import           Config
 import           Feed.Annotated
 import           Feed.Feed
 import           Feed.Parser
 import           Fetching.History
-
-import qualified Config
 
 ------------------------------------------------------------------------
 
@@ -87,7 +88,7 @@ downloadDebug urls = do
 
 runTest :: IO ()
 runTest = do
-  cfgPath <- getConfigPath
+  cfgPath <- getAppUserDataDirectory $ "haarss" </> "config"
   cfg <- read <$> readFile cfgPath
-  downloadDebug (cfg^.Config.urls)
+  downloadDebug (cfg^..entries.traverse._2)
 -}

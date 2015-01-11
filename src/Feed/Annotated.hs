@@ -98,7 +98,6 @@ mergeItems old new = flip map new $ \n ->
   m :: IntMap AnnItem
   m = M.fromList $ map (\o -> (hashItem o, o)) old
 
-
 -- | The function for merging items is idempotent.
 prop_mergeItemsIdempotent :: [AnnItem] -> Bool
 prop_mergeItemsIdempotent is = mergeItems is is == is
