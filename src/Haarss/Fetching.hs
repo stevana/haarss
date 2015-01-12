@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Fetching where
+module Haarss.Fetching where
 
 import           Control.Applicative
 import           Control.Concurrent.ParallelIO
@@ -20,11 +20,11 @@ import           System.Directory
 import           System.FilePath
 import           System.Timeout
 
-import           Config
-import           Feed.Annotated
-import           Feed.Feed
-import           Feed.Parser
-import           Fetching.History
+import           Haarss.Config
+import           Haarss.Feed.Annotated
+import           Haarss.Feed.Feed
+import           Haarss.Feed.Parser
+import           Haarss.Fetching.History
 
 ------------------------------------------------------------------------
 

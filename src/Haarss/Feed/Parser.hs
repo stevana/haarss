@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Feed.Parser (parseFeed) where
+module Haarss.Feed.Parser (parseFeed) where
 
 import           Control.Exception       (SomeException)
 import           Data.ByteString.Lazy    (ByteString)
@@ -11,7 +11,7 @@ import           Data.Text.Lens          (unpacked)
 import           Text.XML                (def, parseText)
 import           Text.XML.Lens
 
-import           Feed.Feed
+import           Haarss.Feed.Feed
 
 ------------------------------------------------------------------------
 

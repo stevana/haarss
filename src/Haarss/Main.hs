@@ -3,7 +3,7 @@
 {-# LANGUAGE RecursiveDo         #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Main where
+module Haarss.Main where
 
 import           Control.Applicative
 import           Control.Concurrent
@@ -19,13 +19,13 @@ import qualified Graphics.Vty        as Vty
 import           System.Exit
 import           System.Process
 
-import           Config
-import           Feed.Annotated
-import           Fetching
-import           Interface
-import           Model
-import           Model.Window
-import           View
+import           Haarss.Config
+import           Haarss.Feed.Annotated
+import           Haarss.Fetching
+import           Haarss.Interface
+import           Haarss.Model
+import           Haarss.Model.Window
+import           Haarss.View
 
 ------------------------------------------------------------------------
 

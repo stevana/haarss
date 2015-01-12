@@ -2,8 +2,9 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
+{-# OPTIONS_GHC -F -pgmF htfpp  #-}
 
-module Feed.Annotated where
+module Haarss.Feed.Annotated where
 
 import           Control.Applicative
 import           Control.Lens
@@ -18,10 +19,10 @@ import qualified Data.Text           as T
 import           Data.Time
 import           GHC.Generics        (Generic)
 import           System.Locale
-import           Test.QuickCheck     hiding (Failure, Success)
+import           Test.Framework      hiding (Failure, Success)
 
-import           Feed.Feed
-import           Fetching.History
+import           Haarss.Feed.Feed
+import           Haarss.Fetching.History
 
 ------------------------------------------------------------------------
 
@@ -67,13 +68,13 @@ mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
 mergeFeeds old new = flip map new $ \n ->
   case M.lookup (hash (n^.feed.feedHome)) m of
     Nothing -> n
-    Just o  -> merge o n
+    Just o  -> mergeFeed o n
   where
   m :: IntMap AnnFeed
   m = M.fromList $ map (\o -> (hash (o^.feed.feedHome), o)) old
 
-merge :: AnnFeed -> AnnFeed -> AnnFeed
-merge old new
+mergeFeed :: AnnFeed -> AnnFeed -> AnnFeed
+mergeFeed old new
   | new^.history^?_head._Failure & isJust
   = old & history %~ \h -> prune (new^.history ++ h)
 
@@ -138,7 +139,7 @@ prop_overviewLength time fs =
   overview^.feed.feedItems.to length == sumOf folded fs'
   where
   fs' :: [Int]
-  fs' = fs^..folded.feed.feedItems & mapped %~ length . filter _isRead
+  fs' = fs^..folded.feed.feedItems & mapped %~ length . filter (not._isRead)
 
   overview :: AnnFeed
   overview = head $ addOverviewFeed time fs

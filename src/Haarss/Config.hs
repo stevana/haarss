@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Config where
+module Haarss.Config where
 
 import           Control.Lens
 import           Data.Char        (isSpace)
@@ -9,8 +9,8 @@ import           System.Directory (createDirectoryIfMissing, doesFileExist,
                                    getAppUserDataDirectory)
 import           System.FilePath  (takeDirectory, (</>))
 
-import           Feed.Annotated
-import           Feed.Feed
+import           Haarss.Feed.Annotated
+import           Haarss.Feed.Feed
 
 ------------------------------------------------------------------------
 -- * Types

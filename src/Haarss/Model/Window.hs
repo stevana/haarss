@@ -1,8 +1,9 @@
 {-# LANGUAGE DeriveFunctor   #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns    #-}
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module Model.Window
+module Haarss.Model.Window
   ( Window
   , Window'
 
@@ -37,6 +38,8 @@ module Model.Window
   , rearrangeDown
 
   , findFirst
+
+  , htf_thisModulesTests
   )
   where
 
@@ -50,6 +53,7 @@ import           Data.Bitraversable
 import           Data.Foldable
 import           Data.Monoid
 import           Data.Sequence       as Seq
+import           Test.Framework      hiding (resize)
 import           Test.QuickCheck     hiding (resize)
 
 ------------------------------------------------------------------------

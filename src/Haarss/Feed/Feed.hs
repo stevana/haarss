@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Feed.Feed where
+module Haarss.Feed.Feed where
 
 import           Control.Applicative
 import           Control.Lens

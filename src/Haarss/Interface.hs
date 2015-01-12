@@ -4,12 +4,12 @@
 {-# LANGUAGE KindSignatures            #-}
 {-# LANGUAGE TypeFamilies              #-}
 
-module Interface where
+module Haarss.Interface where
 
 import           Data.Time
 import           Test.QuickCheck
 
-import           Feed.Annotated
+import           Haarss.Feed.Annotated
 
 ------------------------------------------------------------------------
 

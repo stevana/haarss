@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Fetching.History where
+module Haarss.Fetching.History where
 
 import           Control.Applicative
 import           Control.Lens
@@ -103,8 +103,8 @@ instance Serialize Status              where
 
 instance Arbitrary History where
   arbitrary = oneof
-    [ Fetching.History.Success <$> arbitrary
-    , Fetching.History.Failure <$> arbitrary <*> arbitrary
+    [ Success <$> arbitrary
+    , Failure <$> arbitrary <*> arbitrary
     ]
 
 instance Arbitrary FailureReason where

@@ -4,8 +4,9 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module Model where
+module Haarss.Model where
 
 import           Prelude              hiding (foldl, foldr)
 
@@ -20,7 +21,7 @@ import           Data.Serialize
 import           Data.Text            (Text)
 import qualified Data.Text            as T
 import           Data.Text.Lens
-import           Test.QuickCheck      hiding (resize)
+import           Test.Framework       hiding (resize)
 
 -- XXX:
 import qualified Data.ByteString      as BS
@@ -30,11 +31,11 @@ import           System.Directory
 import           System.Locale
 import           System.FilePath
 
-import           Config
-import           Feed.Annotated
-import           Feed.Feed
-import           Interface
-import           Model.Window
+import           Haarss.Config
+import           Haarss.Feed.Annotated
+import           Haarss.Feed.Feed
+import           Haarss.Interface
+import           Haarss.Model.Window
 
 ------------------------------------------------------------------------
 -- * Datatypes
@@ -95,7 +96,10 @@ items = lens g s
   where
   g :: Model -> Window AnnItem
   g m = case m^.browsing.focus of
-    TheFeed  f      -> f^.feed.feedItems.to (makeWindow (m^.feeds.to size))
+    TheFeed  f      -> if f^.feed.feedItems.to null
+                       then error "items: Feed has no items."
+                       else f^.feed.feedItems.to
+                              (makeWindow (m^.feeds.to size))
     TheItems _ is   -> is
     TheText  _ is _ -> is
 
@@ -108,10 +112,14 @@ items = lens g s
 
 -- Note that this is only true modulo not caring about the size.
 prop_itemsSetView :: Model -> Window AnnItem -> Bool
-prop_itemsSetView m w = closeWindow w == (m & items .~ w)^.items.to closeWindow
+prop_itemsSetView m w =
+  closeWindow w == (m & items .~ w)^.items.to closeWindow
 
 prop_itemsViewSet :: Model -> Bool
-prop_itemsViewSet m = m == (m & items .~ m^.items)
+prop_itemsViewSet m
+    -- XXX: This is bad -- see error thrown in @items@.
+  | m^.feeds.focus.feed.feedItems.to length == 0 = True
+  | otherwise =  m == (m & items .~ m^.items)
 
 prop_itemsSetSet :: Model -> Window AnnItem -> Window AnnItem -> Bool
 prop_itemsSetSet m w1 w2 =
@@ -287,6 +295,10 @@ update ClosePrompt   ()  ()  m = case m^.prompt of
 update RemoveFeed    ()   () m = m & feeds %~ remove
 update Rearrange     Up   () m = m & feeds %~ rearrangeUp
 update Rearrange     Down () m = m & feeds %~ rearrangeDown
+update Rearrange     _    _  _ = error "update: Impossible"
+update Search        _    _  _ = error "update: Impossible"
+update Resize        _    _  _ = error "update: Impossible"
+update Quit          _    _  _ = error "update: Impossible"
 
 ------------------------------------------------------------------------
 
@@ -311,9 +323,9 @@ markAllAsRead m
 
 feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
 -- XXX: Overview feed specific...
-feedsDownloaded (time, [f]) m | m^.feeds.to (length . closeWindow) > 2 =
+feedsDownloaded (_, [f])    m | m^.feeds.to (length . closeWindow) > 2 =
   -- XXX: The overview feeds should be update as well...
-  m & feeds.focus %~ flip Feed.Annotated.merge f
+  m & feeds.focus %~ flip mergeFeed f
 feedsDownloaded (time, fs)  m =
   m & feeds .~ makeWindow (m^.feeds.to size)
                  (addOverviewFeed time (mergeFeeds

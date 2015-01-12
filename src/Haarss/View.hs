@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-module View (viewModel) where
+module Haarss.View (viewModel) where
 
 import           Control.Lens
 import           Data.Char                 (chr)
@@ -14,12 +14,12 @@ import           Graphics.Vty.Prelude
 import           Network.HTTP.Types.Status
 import           Numeric                   (readHex)
 
-import           Feed.Annotated
-import           Feed.Feed
-import           Fetching.History
-import           Interface
-import           Model hiding (update)
-import           Model.Window
+import           Haarss.Feed.Annotated
+import           Haarss.Feed.Feed
+import           Haarss.Fetching.History
+import           Haarss.Interface
+import           Haarss.Model hiding (update)
+import           Haarss.Model.Window
 
 ------------------------------------------------------------------------
 
