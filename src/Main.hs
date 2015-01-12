@@ -44,7 +44,7 @@ main = do
   cfg                 <- loadConfig
   vty                 <- Vty.mkVty =<< Vty.standardIOConfig
   sz                  <- Vty.displayBounds $ Vty.outputIface vty
-  model               <- resizeModel sz <$> loadModel cfg
+  model               <- updateModel cfg . resizeModel sz <$> loadModel cfg
   (eEvent, pushEvent) <- sync newEvent
   tid                 <- myThreadId
 

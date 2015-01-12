@@ -13,9 +13,13 @@ import           Control.Applicative
 import           Control.Lens         hiding (below)
 import           Control.Monad
 import           Data.Foldable
+import           Data.Hashable
+import           Data.IntMap          (IntMap)
+import qualified Data.IntMap          as M
 import           Data.Serialize
 import           Data.Text            (Text)
 import qualified Data.Text            as T
+import           Data.Text.Lens
 import           Test.QuickCheck      hiding (resize)
 
 -- XXX:
@@ -358,3 +362,17 @@ saveModel :: [AnnFeed] -> IO ()
 saveModel fs = do
   modelPath <- getAppUserDataDirectory $ "haarss" </> "model"
   BS.writeFile modelPath $ encode fs
+
+updateModel :: Config -> Model -> Model
+updateModel cfg m = m & feeds .~
+  (makeWindow (m^.feeds.to size) $ flip map (cfg^.entries) $ \e ->
+    case M.lookup (e^._2.to hash) im of
+      Nothing -> newEmptyAnnFeed & feed.feedTitle ?~ e^._2.packed
+                                 & feed.feedHome  .~ e^._2
+                                 & alias          .~ (e^._1 & mapped
+                                                            %~ T.pack)
+      Just f  -> f & alias .~ (e^._1 & mapped %~ T.pack))
+  where
+  im :: IntMap AnnFeed
+  im = M.fromList $ map (\f -> (f^.feed.feedHome.to hash, f))
+     $ m^.feeds.to closeWindow
