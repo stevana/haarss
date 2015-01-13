@@ -1,17 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Haarss.Feed.Parser (parseFeed) where
 
+import           Control.Applicative
 import           Control.Exception       (SomeException)
 import           Data.ByteString.Lazy    (ByteString)
+import           Data.Monoid
 import           Data.Text               (Text)
-import           Data.Text               as T (lines, null, strip)
+import qualified Data.Text               as T
 import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
 import           Data.Text.Lens          (unpacked)
 import           Text.XML                (def, parseText)
 import           Text.XML.Lens
 
 import           Haarss.Feed.Feed
+
+-- XXX: Debug
+-- import qualified Data.ByteString.Lazy as BS
 
 ------------------------------------------------------------------------
 
@@ -80,14 +86,37 @@ fromAtom doc = newEmptyFeed AtomKind
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
     & itemLink        .~ e^?entire.ell "link".attr "href".unpacked
-    & itemDate        .~ e^?entire.ell "published".text
+    & itemDate        .~ (e^?entire.ell "published".text <|>
+                          e^?entire.ell "updated".text)
     & itemFeedLink    .~ Nothing
-    & itemDescription .~ e^?entire.ell "summary".text
+    & itemDescription .~ e^?entire.ell "summary".text <>
+                         e^?entire.ell "content".text.to removeHtml
+    where
+    removeHtml :: Text -> Text
+    removeHtml = go False . T.strip
+      where
+      go :: Bool -> Text -> Text
+      go False (T.uncons -> Nothing)       = T.empty
+      go False (T.uncons -> Just ('<', t)) = go True  t
+      go False (T.uncons -> Just (c, t))   = c `T.cons` go False t
+      go True  (T.uncons -> Nothing)       = T.empty
+      go True  (T.uncons -> Just ('>', t)) = go False  t
+      go True  (T.uncons -> Just (_, t))   = go True t
+      go False (T.uncons -> _)             = error "Impossible"
+      go True  (T.uncons -> _)             = error "Impossible"
+
 
 ------------------------------------------------------------------------
 -- XXX: Debugging
 
 {-
+main = do
+  bs <- BS.readFile "/tmp/master.atom"
+  case parseFeed bs of
+    Left  _ -> putStrLn "error"
+    Right f -> putStrLn $ ppFeed f
+
+
 ppFeed :: Feed -> String
 ppFeed f = unlines
   [ f^.feedTitle.to show
@@ -101,7 +130,7 @@ ppItem i = unlines
   [ i^.itemTitle.to show
   , i^.itemLink.to show
   , i^.itemDate.to show
-  , i^.itemDescription.to (take 20 . show)
+  , i^.itemDescription.to show
   ]
 
 ppList :: (a -> String) -> [a] -> String
