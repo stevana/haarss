@@ -130,7 +130,7 @@ addOverviewFeed time fs = overview : fs
       is' :: [(AnnItem, Maybe Text)]
       is' = fs & concatMapOf folded (\f -> zip
         (f^.feed.feedItems^..folded.filtered (not . _isRead))
-        (repeat (f^.feed.feedTitle)))
+        (repeat (f^.alias <|> f^.feed.feedTitle)))
 
 -- | The overview feed should have as many items as there are unread
 -- items in the feeds from which the overview was created.

@@ -338,7 +338,7 @@ search t m | browsingFeeds m = m & feeds %~ findFirst (matchFeed t)
            | otherwise       = m
   where
   matchFeed :: Text -> AnnFeed -> Bool
-  matchFeed t' f = t' `matchText` (f^.feed.feedTitle)
+  matchFeed t' f = t' `matchText` (f^.alias <|> f^.feed.feedTitle)
 
   matchItem :: Text -> AnnItem -> Bool
   matchItem t' i = t' `matchText` (i^.item.itemTitle)
