@@ -3,8 +3,8 @@ version:             0.1.0.0
 synopsis:            A terminal based feed reader.
 category:            Console, Network, RSS/Atom Reader, Feed, RSS, Atom, XML
 description:
-  @haarss@ is a <https://kiza.eu/software/snownews/ @snownews@> clone
-  that doesn't work very well.
+  @haarss@ is a terminal based feed reader. For more, see its
+  <https://github.com/stevana/haarss homepage>.
 homepage:            https://github.com/stevana/haarss
 bug-reports:         https://github.com/stevana/haarss/issues
 license:             OtherLicense
