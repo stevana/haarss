@@ -368,23 +368,23 @@ loadModel cfg = do
       em <- decode <$> BS.readFile modelPath
       case em of
         Left _  -> error "loadModel: failed to restore saved model."
-        Right m -> return m
+        Right m -> return $ updateModel cfg m
+  where
+  updateModel :: Config -> Model -> Model
+  updateModel cfg m = m & feeds .~
+    (makeWindow (m^.feeds.to size) $ flip map (cfg^.entries) $ \e ->
+      case M.lookup (e^._2.to hash) im of
+        Nothing -> newEmptyAnnFeed & feed.feedTitle ?~ e^._2.packed
+                                   & feed.feedHome  .~ e^._2
+                                   & alias          .~ (e^._1 & mapped
+                                                              %~ T.pack)
+        Just f  -> f & alias .~ (e^._1 & mapped %~ T.pack))
+    where
+    im :: IntMap AnnFeed
+    im = M.fromList $ map (\f -> (f^.feed.feedHome.to hash, f))
+       $ m^.feeds.to closeWindow
 
 saveModel :: [AnnFeed] -> IO ()
 saveModel fs = do
   modelPath <- getAppUserDataDirectory $ "haarss" </> "model"
   BS.writeFile modelPath $ encode fs
-
-updateModel :: Config -> Model -> Model
-updateModel cfg m = m & feeds .~
-  (makeWindow (m^.feeds.to size) $ flip map (cfg^.entries) $ \e ->
-    case M.lookup (e^._2.to hash) im of
-      Nothing -> newEmptyAnnFeed & feed.feedTitle ?~ e^._2.packed
-                                 & feed.feedHome  .~ e^._2
-                                 & alias          .~ (e^._1 & mapped
-                                                            %~ T.pack)
-      Just f  -> f & alias .~ (e^._1 & mapped %~ T.pack))
-  where
-  im :: IntMap AnnFeed
-  im = M.fromList $ map (\f -> (f^.feed.feedHome.to hash, f))
-     $ m^.feeds.to closeWindow
