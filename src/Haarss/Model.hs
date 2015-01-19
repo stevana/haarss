@@ -231,6 +231,9 @@ moveBrowse d fz = case fz^.focus of
   TheFeed  f      -> case d of
     In  -> let is = f^.feed.feedItems
            in if not (null is)
+              -- XXX: This won't cut it if the size of fz isn't the
+              -- height of the screen... Might need to carry around that
+              -- information in the model after all?
               then fz & focus .~ TheItems f (makeWindow (size fz - 2) is)
               else fz
     Out -> fz
