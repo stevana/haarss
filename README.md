@@ -52,7 +52,7 @@ in your `PATH`.
   * Read feed/item with `l` or `ENTER`, go back with `q` (going back
     when viewing the feeds will quit the program);
   * Open the current item's url using an external browser with `o`;
-  * Mark the current item as read with `M`, or mark all items as read
+  * Mark the current item as read with `M`, or mark all items as read with `m`;
   * Change the name of a feed with `c`;
   * Rearrange the order of feeds with `N` and `P`;
   * Search among feed/item titles with `/` or `TAB`.
