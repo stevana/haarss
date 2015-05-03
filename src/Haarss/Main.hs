@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE GADTs               #-}
-{-# LANGUAGE RecursiveDo         #-}
+{-# LANGUAGE DoRec               #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haarss.Main where
