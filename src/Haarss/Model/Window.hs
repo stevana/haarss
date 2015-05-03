@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveFunctor   #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns    #-}
-{-# OPTIONS_GHC -F -pgmF htfpp #-}
 
 module Haarss.Model.Window
   ( Window
@@ -55,7 +54,6 @@ import           Data.Bitraversable
 import           Data.Foldable
 import           Data.Monoid
 import           Data.Sequence       as Seq
-import           Test.Framework      hiding (resize)
 import           Test.QuickCheck     hiding (resize)
 
 ------------------------------------------------------------------------

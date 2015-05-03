@@ -4,7 +4,6 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
-{-# OPTIONS_GHC -F -pgmF htfpp #-}
 
 module Haarss.Model where
 
@@ -21,7 +20,7 @@ import           Data.Serialize
 import           Data.Text            (Text)
 import qualified Data.Text            as T
 import           Data.Text.Lens
-import           Test.Framework       hiding (resize)
+import           Test.QuickCheck      hiding (resize)
 
 -- XXX:
 import qualified Data.ByteString      as BS
