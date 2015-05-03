@@ -109,13 +109,8 @@ prop_isReadKept is = andOf (traverse.isRead) $
 
 ------------------------------------------------------------------------
 
-addOverviewFeed :: UTCTime -> [AnnFeed] -> [AnnFeed]
-addOverviewFeed time fs = overview : fs
-  where
-  rfc822Time = formatTime defaultTimeLocale rfc822DateFormat time
-
-  overview :: AnnFeed
-  overview = newEmptyAnnFeed
+makeOverview :: UTCTime -> [AnnFeed] -> AnnFeed
+makeOverview time fs = newEmptyAnnFeed
     & feed    .~ (newEmptyFeed AtomKind
       & feedTitle       ?~ "(New headlines)"
       & feedDescription ?~ "(New headlines)"
@@ -123,6 +118,8 @@ addOverviewFeed time fs = overview : fs
       & feedItems       .~ is)
     & history .~ [Success time]
     where
+    rfc822Time = formatTime defaultTimeLocale rfc822DateFormat time
+
     is :: [AnnItem]
     is = is' & mapped %~ \(i, mt) -> i & item.itemTitle %~ \t ->
       mconcat [Just "(", mt, Just ") ", t]
@@ -131,6 +128,9 @@ addOverviewFeed time fs = overview : fs
       is' = fs & concatMapOf folded (\f -> zip
         (f^.feed.feedItems^..folded.filtered (not . _isRead))
         (repeat (f^.alias <|> f^.feed.feedTitle)))
+
+addOverviewFeed :: UTCTime -> [AnnFeed] -> [AnnFeed]
+addOverviewFeed time fs = makeOverview time fs : fs
 
 -- | The overview feed should have as many items as there are unread
 -- items in the feeds from which the overview was created.

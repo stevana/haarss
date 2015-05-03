@@ -14,6 +14,7 @@ module Haarss.Model.Window
   , below
 
   , makeWindow
+  , window
 
   , closeWindow
   , closeWindow'
@@ -21,6 +22,7 @@ module Haarss.Model.Window
   , size
   , add
   , remove
+  , replace
 
   , down
   , down'
@@ -128,6 +130,11 @@ makeWindow sz (x : xs) =
   where
   (ns, bs) = Prelude.splitAt (sz - 1) xs
 
+-- | Smart constructor for creating a window via lists.
+window :: [a] -> [a] -> a -> [a] -> [a] -> Window a
+window as ps x ns bs =
+  Window (fromList as) (fromList ps) x (fromList ns) (fromList bs)
+
 ------------------------------------------------------------------------
 -- * Elimination
 
@@ -153,7 +160,7 @@ canMoveUp :: Window a -> Bool
 canMoveUp w = w^.above.to length + w^.prev.to length > 0
 
 ------------------------------------------------------------------------
--- * Adding and removing
+-- * Adding, removing and replacing elements
 
 add :: a -> Window a -> Window a
 add x w = resize (size w) $
@@ -177,10 +184,38 @@ remove w@(Window (viewr -> as :> a) (viewr -> EmptyR) _
 remove w@(Window (viewr -> EmptyR)  (viewr -> EmptyR) _
                  (viewl -> EmptyL)  (viewl -> EmptyL))
   = w
+remove _
+  = error "Impossible."
 
 prop_addRemove :: Int -> Window Int -> Bool
 prop_addRemove x w =
   closeWindow (remove (add x w)) == closeWindow w
+
+replace :: Int -> a -> Window a -> Window a
+replace pos x w@(Window as ps _ ns bs)
+  | pos >= Prelude.length (closeWindow w)
+                              = w
+  | pos < las                 = w & above .~ update pos x as
+  | pos - las < lps           = w & prev  .~ update (pos - las) x ps
+  | pos - las - lps == 0      = w & focus .~ x
+  | pos - las - lps - 1 < lns = w & next  .~ update
+                                               (pos - las - lps - 1) x ns
+  | otherwise                 = w & below .~ update
+                                               (pos - las - lps - 1 - lns) x bs
+  where
+  las = Seq.length as
+  lps = Seq.length ps
+  lns = Seq.length ns
+
+prop_replace :: Positive Int -> Int -> Window Int -> Bool
+prop_replace (Positive pos) z w =
+  closeWindow (replace pos z w) == replaceList pos z (closeWindow w)
+  where
+  replaceList :: Int -> a -> [a] -> [a]
+  replaceList n x xs | n >= Prelude.length xs = xs
+                     | otherwise              = xs1 ++ x : xs2
+    where
+    (xs1, (_ : xs2)) = Prelude.splitAt n xs
 
 ------------------------------------------------------------------------
 -- * Movement

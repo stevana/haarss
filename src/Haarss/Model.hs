@@ -324,11 +324,21 @@ markAllAsRead m
 
   | otherwise = m & items.both.isRead .~ True
 
+updateOverviewFeed :: UTCTime -> Window AnnFeed -> Window AnnFeed
+updateOverviewFeed time w =
+  replace 0 (makeOverview time (drop 1 (closeWindow w))) w
+
 feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
 -- XXX: Overview feed specific...
-feedsDownloaded (_, [f])    m | m^.feeds.to (length . closeWindow) > 2 =
-  -- XXX: The overview feeds should be update as well...
-  m & feeds.focus %~ flip mergeFeed f
+feedsDownloaded (time, [f]) m | m^.feeds.to (length . closeWindow) > 2 =
+  if browsingItems m
+     then m' & items .~
+       (m'^.feeds.focus.feed.feedItems.to (makeWindow (m'^.items.to size)))
+     else m'
+  where
+  m'  = m & feeds.focus %~ flip mergeFeed f
+          & feeds %~ updateOverviewFeed time
+
 feedsDownloaded (time, fs)  m =
   m & feeds .~ makeWindow (m^.feeds.to size)
                  (addOverviewFeed time (mergeFeeds
