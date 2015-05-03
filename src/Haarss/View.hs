@@ -56,18 +56,18 @@ render m sz = vertCat
 drawModel :: Model -> DisplayRegion -> Image
 drawModel m (w, h) = case m^.browsing.focus of
 
-  TheFeed _      -> drawWin (m^.feeds)
-                            (feedImage w defAttr)
-                            (feedImage w standoutAttr)
+  TheFeed _        -> drawWin (m^.feeds)
+                              (feedImage w defAttr)
+                              (feedImage w standoutAttr)
 
-  TheItems f is  -> vertCat
+  TheItems f is    -> vertCat
     [ attributed boldAttr (desc f^.be "")
     , separator
     , drawWin is (itemImage defAttr boldAttr w)
                  (itemImage standoutAttr standoutBoldAttr w)
     ]
 
-  TheText f is s -> vertCat
+  TheText f is sds -> vertCat
     [ attributed boldAttr (desc f^.be "")
     , separator
     , attributed defAttr
@@ -75,13 +75,33 @@ drawModel m (w, h) = case m^.browsing.focus of
     , separator
     , drawList (\t -> char defAttr ' ' <|> attributed defAttr t) $
         is^.focus.item.itemDescription.be
-         "(no desc)".to (take h . drop s . fmt (min 60 w) . removeHtml)
+         "(no desc)".to (scrollText sds . fmt (min 60 w) . removeHtml)
     ]
 
   where
   desc :: AnnFeed -> Maybe Text
   desc f = asumOf both (f^.feed.feedDescription,
                         f^.feed.feedTitle)
+
+  -- XXX: Why do we need to add the blank line?
+  scrollText :: [ScrollDir] -> [Text] -> [Text]
+  scrollText sds ts = "" : drop scrollLines ts
+    where
+    scrollLines :: Int
+    scrollLines = foldr (helper (h - 10) (length ts)) 0 sds
+      where
+      helper :: Int -> Int -> ScrollDir -> Int -> Int
+      helper sz max DownFull ih | ih + sz >= max           = ih
+                                | otherwise                = ih + sz
+      helper sz max DownHalf ih | ih + (sz `div` 2) >= max = ih
+                                | otherwise                = ih + sz `div` 2
+      helper sz max UpFull   ih | ih - sz <= 0             = 0
+                                | otherwise                = ih - sz
+      helper sz max UpHalf   ih | ih - (sz `div` 2) <= 0   = 0
+                                | otherwise                = ih - sz `div` 2
+
+
+
 
 ------------------------------------------------------------------------
 

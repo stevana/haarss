@@ -51,7 +51,7 @@ type Browse = Window' AnnFeed Focus
 
 data Focus
   = TheFeed
-      { _annFeed :: AnnFeed
+      { _annFeed  :: AnnFeed
       }
   | TheItems
       { _annFeed  :: AnnFeed
@@ -60,7 +60,7 @@ data Focus
   | TheText
       { _annFeed  :: AnnFeed
       , _annItems :: Window AnnItem
-      , _scroll   :: Int
+      , _scroll   :: [ScrollDir]
       }
   deriving Eq
 
@@ -240,14 +240,14 @@ moveBrowse d fz = case fz^.focus of
     _   -> moveWin' d TheFeed _annFeed fz
 
   TheItems f iz   -> case d of
-    In  -> fz & focus .~ TheText  f (iz & focus.isRead .~ True) 0
+    In  -> fz & focus .~ TheText  f (iz & focus.isRead .~ True) []
     Out -> fz & focus .~ TheFeed (f & feed.feedItems .~ closeWindow iz)
     _   -> fz & focus .~ TheItems f (moveWin d iz)
 
   TheText  f iz s -> case d of
     In  -> fz & focus .~ TheItems f iz
     Out -> fz & focus .~ TheItems f iz
-    _   -> fz & focus .~ TheText  f (moveWin d iz & focus.isRead .~ True) s
+    _   -> fz & focus .~ TheText  f (moveWin d iz & focus.isRead .~ True) []
 
 move :: Dir -> Model -> Model
 move d m = m & browsing %~ moveBrowse d
@@ -298,6 +298,8 @@ update ClosePrompt   ()  ()  m = case m^.prompt of
 update RemoveFeed    ()   () m = m & feeds %~ remove
 update Rearrange     Up   () m = m & feeds %~ rearrangeUp
 update Rearrange     Down () m = m & feeds %~ rearrangeDown
+update Scroll        d    () m = m & browsing.focus.scroll %~ cons d
+
 update Rearrange     _    _  _ = error "update: Impossible"
 update Search        _    _  _ = error "update: Impossible"
 update Resize        _    _  _ = error "update: Impossible"

@@ -115,6 +115,7 @@ setupReactive cfg vty sz initModel eEvent tid = do
           resp RemoveFeed    () = return ()
           resp Rearrange     _  = return ()
           resp Search        _  = return ()
+          resp Scroll        _  = return ()
           resp Resize        _  = return ()
 
     bModel <- accum initModel $ mconcat
@@ -159,6 +160,10 @@ cmd e m Normal | key 'N'   == e &&
                  browsingFeeds m    = normal Rearrange Down
 cmd e _ Normal | key '/'   == e     = input  OpenPrompt SearchPrompt
 cmd e _ Normal | key '\t'  == e     = input  OpenPrompt SearchPrompt
+cmd e _ Normal | key ' '   == e     = normal Scroll DownFull
+cmd e _ Normal | key 'd'   == e     = normal Scroll DownHalf
+cmd e _ Normal | key 'b'   == e     = normal Scroll UpFull
+cmd e _ Normal | key 'u'   == e     = normal Scroll UpHalf
 cmd _ _ Normal                      = (Nothing, Normal)
 
 cmd e m Input  | isKey e            = input  PutPrompt (getKey e)

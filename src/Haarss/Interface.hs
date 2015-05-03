@@ -27,6 +27,7 @@ data Op'
   | RemoveFeed'
   | Rearrange'
   | Search'
+  | Scroll'
   | Resize'
   | Quit'
 
@@ -44,14 +45,15 @@ data Op :: Op' -> * where
   RemoveFeed     :: Op RemoveFeed'
   Rearrange      :: Op Rearrange'
   Search         :: Op Search'
+  Scroll         :: Op Scroll'
   Resize         :: Op Resize'
   Quit           :: Op Quit'
 
 data Dir = Up | Down | In | Out | Top | Bot
-  deriving (Show, Eq, Enum)
+  deriving (Show, Eq, Enum, Bounded)
 
 instance Arbitrary Dir where
-  arbitrary = elements [Up, Down, In , Out, Top, Bot]
+  arbitrary = elements [(minBound :: Dir) ..]
 
 data Prompt = AddFeed | RenameFeed | SearchPrompt
   deriving Eq
@@ -63,6 +65,12 @@ instance Show Prompt where
 
 instance Arbitrary Prompt where
   arbitrary = elements [AddFeed, SearchPrompt]
+
+data ScrollDir = DownFull | DownHalf | UpFull | UpHalf
+  deriving (Show, Eq, Enum, Bounded)
+
+instance Arbitrary ScrollDir where
+  arbitrary = elements [(minBound :: ScrollDir) ..]
 
 type family Cmd (o :: Op') :: * where
   Cmd 'Move'           = Dir
@@ -78,6 +86,7 @@ type family Cmd (o :: Op') :: * where
   Cmd 'RemoveFeed'     = ()
   Cmd 'Rearrange'      = Dir
   Cmd 'Search'         = ()
+  Cmd 'Scroll'         = ScrollDir
   Cmd 'Resize'         = ()
   Cmd 'Quit'           = [AnnFeed]
 
@@ -97,6 +106,7 @@ type family Resp (o :: Op') :: * where
   Resp 'RemoveFeed'     = ()
   Resp 'Rearrange'      = ()
   Resp 'Search'         = ()
+  Resp 'Scroll'         = ()
   Resp 'Resize'         = ()
   Resp 'Quit'           = ()
 
