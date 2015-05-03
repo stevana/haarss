@@ -39,8 +39,6 @@ module Haarss.Model.Window
   , rearrangeDown
 
   , findFirst
-
-  , htf_thisModulesTests
   )
   where
 
