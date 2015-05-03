@@ -53,7 +53,7 @@ data Dir = Up | Down | In | Out | Top | Bot
   deriving (Show, Eq, Enum, Bounded)
 
 instance Arbitrary Dir where
-  arbitrary = elements [(minBound :: Dir) ..]
+  arbitrary = elements [minBound ..]
 
 data Prompt = AddFeed | RenameFeed | SearchPrompt
   deriving Eq
@@ -70,7 +70,7 @@ data ScrollDir = DownFull | DownHalf | UpFull | UpHalf
   deriving (Show, Eq, Enum, Bounded)
 
 instance Arbitrary ScrollDir where
-  arbitrary = elements [(minBound :: ScrollDir) ..]
+  arbitrary = elements [minBound ..]
 
 type family Cmd (o :: Op') :: * where
   Cmd 'Move'           = Dir
