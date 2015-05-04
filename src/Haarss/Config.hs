@@ -80,4 +80,4 @@ updateConfig cfg fs = do
     ppList (x : xs) = "[ " ++ show x ++ "\n" ++ go xs
       where
       go []       = "    ]"
-      go (x : xs) = "    , " ++ show x ++ "\n" ++ go xs
+      go (y : ys) = "    , " ++ show y ++ "\n" ++ go ys
