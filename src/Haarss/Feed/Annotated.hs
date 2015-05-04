@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
+{-# OPTIONS_GHC -F -pgmF htfpp  #-}
 
 module Haarss.Feed.Annotated where
 
@@ -18,7 +19,7 @@ import qualified Data.Text           as T
 import           Data.Time
 import           GHC.Generics        (Generic)
 import           System.Locale
-import           Test.QuickCheck     hiding (Success)
+import           Test.Framework      hiding (Failure, Success)
 
 import           Haarss.Feed.Feed
 import           Haarss.Fetching.History
