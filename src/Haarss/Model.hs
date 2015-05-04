@@ -325,6 +325,7 @@ markAllAsRead m
   = m & feeds.both.feed.feedItems.traverse.isRead .~ True
       & items.both.isRead .~ True
 
+  -- XXX: we should update overview feed also...
   | otherwise = m & items.both.isRead .~ True
 
 updateOverviewFeed :: UTCTime -> Window AnnFeed -> Window AnnFeed
