@@ -24,28 +24,30 @@ import           Haarss.Model.Window
 ------------------------------------------------------------------------
 
 viewModel :: Vty -> Model -> IO ()
-viewModel v m = do
-  sz  <- displayBounds $ outputIface v
-  update v $ picForImage $ render m sz
+viewModel v = update v . picForImage . render
 
-renderDebug :: Model -> DisplayRegion -> Image
-renderDebug m sz = vertCat
+renderDebug :: Model -> Image
+renderDebug m = vertCat
   [ separator
   , drawList (string defAttr) (lines (show m))
   , string defAttr ""
-  , string defAttr ("Height: " ++ show (regionHeight sz))
+  , string defAttr ("Height: " ++ show h)
   ]
+  where
+  (_, h) = m^.displayRegion
 
-render ::  Model -> DisplayRegion -> Image
-render m sz = vertCat
+render ::  Model -> Image
+render m = vertCat
   [ bar " haarss 0.1"
   , separator
-  , resizeHeight (regionHeight sz - 5) (drawModel m sz)
+  , resizeHeight (h - 5) (drawModel m)
   , separator
   , bar (T.pack (status (m^.downloading) (m^.prompt)))
   , separator
   ]
   where
+  (_, h) = m^.displayRegion
+
   status :: Int -> Maybe (Prompt, String) -> String
   status 0 Nothing       = ""
   status n Nothing       = " Downloading (" ++ show n ++ " feed" ++
@@ -53,8 +55,8 @@ render m sz = vertCat
   status 0 (Just (p, s)) = " " ++ show p ++ ": " ++ s
   status _ _             = error "Impossible."
 
-drawModel :: Model -> DisplayRegion -> Image
-drawModel m (w, h) = case m^.browsing.focus of
+drawModel :: Model -> Image
+drawModel m = case m^.browsing.focus of
 
   TheFeed _        -> drawWin (m^.feeds)
                               (feedImage w defAttr)
@@ -79,6 +81,8 @@ drawModel m (w, h) = case m^.browsing.focus of
     ]
 
   where
+  (w, h) = m^.displayRegion
+
   desc :: AnnFeed -> Maybe Text
   desc f = asumOf both (f^.feed.feedDescription,
                         f^.feed.feedTitle)
