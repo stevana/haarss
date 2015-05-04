@@ -41,9 +41,10 @@ import           Haarss.Model.Window
 -- * Datatypes
 
 data Model = Model
-  { _browsing    :: Browse
-  , _downloading :: Int
-  , _prompt      :: Maybe (Prompt, String)
+  { _browsing      :: Browse
+  , _downloading   :: Int
+  , _prompt        :: Maybe (Prompt, String)
+  , _displayRegion :: DisplayRegion
   }
   deriving Eq
 
@@ -165,7 +166,7 @@ instance Show Focus where
     ]
 
 instance Arbitrary Model where
-  arbitrary = liftM3 Model arbitrary arbitrary arbitrary
+  arbitrary = liftM4 Model arbitrary arbitrary arbitrary arbitrary
 
 instance Arbitrary Focus where
   arbitrary = oneof
@@ -195,7 +196,7 @@ prop_serialisation (NonEmpty fs) dirs =
 ------------------------------------------------------------------------
 
 makeModel :: [AnnFeed] -> Model
-makeModel fs = Model (fmap TheFeed (makeWindow 20 fs)) 0 Nothing
+makeModel fs = Model (fmap TheFeed (makeWindow 20 fs)) 0 Nothing (0, 0)
 
 initialModel :: UTCTime -> Config -> Model
 initialModel time cfg = makeModel (addOverviewFeed time fs)
@@ -209,8 +210,11 @@ initialModel time cfg = makeModel (addOverviewFeed time fs)
                                  rfc822DateFormat time)
 
 -- XXX: The magic -5...
+-- XXX: We should probably resize items window size as well, but @items@
+-- is partial so we can't do it straightforwardly...
 resizeModel :: DisplayRegion -> Model -> Model
-resizeModel sz m = m & feeds %~ resize (regionHeight sz - 5)
+resizeModel sz m = m & displayRegion .~ sz
+                     & feeds         %~ resize (regionHeight sz - 5)
 
 ------------------------------------------------------------------------
 -- * Movement
@@ -225,16 +229,13 @@ moveWin _    = id
 moveWin' :: Dir -> (a -> b) -> (b -> a) -> Window' a b -> Window' a b
 moveWin' d f g = fmap f . moveWin d . fmap g
 
-moveBrowse :: Dir -> Browse -> Browse
-moveBrowse d fz = case fz^.focus of
+moveBrowse :: Dir -> Int -> Browse -> Browse
+moveBrowse d h fz = case fz^.focus of
 
   TheFeed  f      -> case d of
     In  -> let is = f^.feed.feedItems
            in if not (null is)
-              -- XXX: This won't cut it if the size of fz isn't the
-              -- height of the screen... Might need to carry around that
-              -- information in the model after all?
-              then fz & focus .~ TheItems f (makeWindow (size fz - 2) is)
+              then fz & focus .~ TheItems f (makeWindow (h - 7) is)
               else fz
     Out -> fz
     _   -> moveWin' d TheFeed _annFeed fz
@@ -244,13 +245,13 @@ moveBrowse d fz = case fz^.focus of
     Out -> fz & focus .~ TheFeed (f & feed.feedItems .~ closeWindow iz)
     _   -> fz & focus .~ TheItems f (moveWin d iz)
 
-  TheText  f iz s -> case d of
+  TheText  f iz _ -> case d of
     In  -> fz & focus .~ TheItems f iz
     Out -> fz & focus .~ TheItems f iz
     _   -> fz & focus .~ TheText  f (moveWin d iz & focus.isRead .~ True) []
 
 move :: Dir -> Model -> Model
-move d m = m & browsing %~ moveBrowse d
+move d m = m & browsing %~ moveBrowse d (m^.displayRegion.to regionHeight)
 
 ------------------------------------------------------------------------
 
@@ -383,10 +384,10 @@ loadModel cfg = do
       em <- decode <$> BS.readFile modelPath
       case em of
         Left _  -> error "loadModel: failed to restore saved model."
-        Right m -> return $ updateModel cfg m
+        Right m -> return $ updateModel m
   where
-  updateModel :: Config -> Model -> Model
-  updateModel cfg m = m & feeds .~
+  updateModel :: Model -> Model
+  updateModel m = m & feeds .~
     (makeWindow (m^.feeds.to size) $ flip map (cfg^.entries) $ \e ->
       case M.lookup (e^._2.to hash) im of
         Nothing -> newEmptyAnnFeed & feed.feedTitle ?~ e^._2.packed
