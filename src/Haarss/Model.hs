@@ -337,8 +337,9 @@ feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
 -- XXX: Overview feed specific...
 feedsDownloaded (time, [f]) m | m^.feeds.to (length . closeWindow) > 2 =
   if browsingItems m
-     then m' & items .~
-       (m'^.feeds.focus.feed.feedItems.to (makeWindow (m'^.items.to size)))
+     then m' & items .~ makeWindow (m'^.items.to size)
+                          (mergeItems (m^.items.to closeWindow)
+                                      (m'^.feeds.focus.feed.feedItems))
      else m'
   where
   m'  = m & feeds.focus %~ flip mergeFeed f
