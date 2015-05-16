@@ -48,30 +48,32 @@ makePrisms ''History
 
 simplifyHttpException :: HttpException -> HttpExceptionSimple
 simplifyHttpException e = case e of
-  StatusCodeException s _ _          -> StatusCodeException' s
-  InvalidUrlException _ _            -> OtherException
-  TooManyRedirects _                 -> OtherException
-  UnparseableRedirect _              -> OtherException
-  TooManyRetries                     -> OtherException
-  HttpParserException _              -> OtherException
-  HandshakeFailed                    -> OtherException
-  OverlongHeaders                    -> OtherException
-  ResponseTimeout                    -> OtherException
-  FailedConnectionException _ _      -> OtherException
-  FailedConnectionException2 {}      -> OtherException
-  ExpectedBlankAfter100Continue      -> OtherException
-  InvalidStatusLine _                -> OtherException
-  InvalidHeader _                    -> OtherException
-  InternalIOException _              -> OtherException
-  ProxyConnectException {}           -> OtherException
-  NoResponseDataReceived             -> OtherException
-  TlsException _                     -> OtherException
-  TlsNotSupported                    -> OtherException
-  ResponseBodyTooShort _ _           -> OtherException
-  InvalidChunkHeaders                -> OtherException
-  IncompleteHeaders                  -> OtherException
-  InvalidDestinationHost _           -> OtherException
-  HttpZlibException _                -> OtherException
+  StatusCodeException s _ _            -> StatusCodeException' s
+  InvalidUrlException _ _              -> OtherException
+  TooManyRedirects _                   -> OtherException
+  UnparseableRedirect _                -> OtherException
+  TooManyRetries                       -> OtherException
+  HttpParserException _                -> OtherException
+  HandshakeFailed                      -> OtherException
+  OverlongHeaders                      -> OtherException
+  ResponseTimeout                      -> OtherException
+  FailedConnectionException _ _        -> OtherException
+  FailedConnectionException2 {}        -> OtherException
+  ExpectedBlankAfter100Continue        -> OtherException
+  InvalidStatusLine _                  -> OtherException
+  InvalidHeader _                      -> OtherException
+  InternalIOException _                -> OtherException
+  ProxyConnectException {}             -> OtherException
+  NoResponseDataReceived               -> OtherException
+  TlsException _                       -> OtherException
+  TlsNotSupported                      -> OtherException
+  ResponseBodyTooShort _ _             -> OtherException
+  InvalidChunkHeaders                  -> OtherException
+  IncompleteHeaders                    -> OtherException
+  InvalidDestinationHost _             -> OtherException
+  HttpZlibException _                  -> OtherException
+  InvalidProxyEnvironmentVariable {}   -> OtherException
+  ResponseLengthAndChunkingBothUsed {} -> OtherException
 
 failed :: [History] -> Bool
 failed (Failure _ _ : _) = True
