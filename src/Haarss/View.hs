@@ -104,9 +104,6 @@ drawModel m = case m^.browsing.focus of
       helper sz max UpHalf   ih | ih - (sz `div` 2) <= 0   = 0
                                 | otherwise                = ih - sz `div` 2
 
-
-
-
 ------------------------------------------------------------------------
 
 drawWin :: Window a -> (a -> Image) -> (a -> Image) -> Image
@@ -200,36 +197,41 @@ fmt maxLen = map T.unwords . go 0 [] . T.words
     wl = T.length w
 
 removeHtml :: Text -> Text
-removeHtml (T.uncons -> Nothing)       = T.empty
-removeHtml (T.uncons -> Just ('<', t)) =
-  case T.break (== '>') t & _2 %~ T.uncons of
-    -- XXX: fmt removes the newlines...
-    ("p",     Just ('>', t')) -> "\n\n" `T.append` removeHtml t'
-    -- XXX: might want to drop everything inside the style tag...
-    ("style", Just ('>', t')) -> removeHtml t'
-    (_,       Just ('>', t')) -> removeHtml t'
-    _                         -> T.empty
-removeHtml (T.uncons -> Just ('&', t)) =
-  case T.break (== ';') t & _2 %~ T.uncons of
-    (code, Just (_, t')) -> decode code `T.append` removeHtml t'
-    _                    -> T.empty
+removeHtml = go ""
   where
-  decode :: Text -> Text
-  decode "amp"                           = T.singleton '&'
-  decode "gt"                            = T.singleton '>'
-  decode "lt"                            = T.singleton '<'
-  decode "mdash"                         = T.singleton '—'
-  decode "nbsp"                          = T.singleton ' '
-  decode "ndash"                         = T.singleton '–'
-  decode "quot"                          = T.singleton '"'
-  decode t@(T.unpack -> '#' : 'x' : hex) = fromHex hex t
-  decode t@(T.unpack -> '#' : 'X' : hex) = fromHex hex t
-  decode (T.unpack   -> '#' : dec)       = T.singleton $ chr $ read dec
-  decode t                               = '&' `T.cons` t `T.snoc` ';'
+  go :: String -> Text -> Text
+  go acc (T.uncons -> Nothing)       = T.pack (reverse acc)
+  go acc (T.uncons -> Just ('<', t)) =
+    case T.break (== '>') t & _2 %~ T.uncons of
+      -- XXX: fmt removes the newlines...
+      ("p",     Just ('>', t')) -> go ('\n' : '\n' : acc) t'
+      -- XXX: might want to drop everything inside the style tag...
+      ("style", Just ('>', t')) -> go acc t'
+      (_,       Just ('>', t')) -> go acc t'
+      _                         -> error "removeHtml: Unexpected."
+  go acc (T.uncons -> Just ('&', t)) =
+    case T.break (== ';') t & _2 %~ T.uncons of
+      (code, Just (_, t')) -> go (maybe ('&' : T.unpack code ++ ";" ++ acc)
+                                        (: acc)
+                                        (decode code)) t'
+      _                    -> error "removeHtml: Unexpected.."
+    where
+    decode :: Text -> Maybe Char
+    decode "amp"                           = Just '&'
+    decode "gt"                            = Just '>'
+    decode "lt"                            = Just '<'
+    decode "mdash"                         = Just '—'
+    decode "nbsp"                          = Just ' '
+    decode "ndash"                         = Just '–'
+    decode "quot"                          = Just '"'
+    decode t@(T.unpack -> '#' : 'x' : hex) = fromHex hex t
+    decode t@(T.unpack -> '#' : 'X' : hex) = fromHex hex t
+    decode (T.unpack   -> '#' : dec)       = Just $ chr $ read dec
+    decode t                               = Nothing
 
-  fromHex :: String -> Text -> Text
-  fromHex s t = case readHex s of
-    [(i, "")] -> T.singleton $ chr i
-    _         -> '&' `T.cons` t `T.snoc` ';'
-removeHtml (T.uncons -> Just (c, t))   = c `T.cons` removeHtml t
-removeHtml (T.uncons -> _)             = error "Impossible."
+    fromHex :: String -> Text -> Maybe Char
+    fromHex s t = case readHex s of
+      [(i, "")] -> Just $ chr i
+      _         -> Nothing
+  go acc (T.uncons -> Just (c, t))   = go (c : acc) t
+  go acc (T.uncons -> _)             = error "Impossible."
