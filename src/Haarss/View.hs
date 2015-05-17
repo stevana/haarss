@@ -200,7 +200,7 @@ removeHtml :: Text -> Text
 removeHtml = go ""
   where
   go :: String -> Text -> Text
-  go acc (T.uncons -> Nothing)       = T.pack (reverse acc)
+  go acc (T.uncons -> Nothing)       = T.pack $ reverse acc
   go acc (T.uncons -> Just ('<', t)) =
     case T.break (== '>') t & _2 %~ T.uncons of
       -- XXX: fmt removes the newlines...
@@ -208,13 +208,15 @@ removeHtml = go ""
       -- XXX: might want to drop everything inside the style tag...
       ("style", Just ('>', t')) -> go acc t'
       (_,       Just ('>', t')) -> go acc t'
-      _                         -> error "removeHtml: Unexpected."
+      (tag,     Nothing)        -> T.pack $ reverse acc ++ T.unpack tag
+                                                        ++ "[>]"
   go acc (T.uncons -> Just ('&', t)) =
     case T.break (== ';') t & _2 %~ T.uncons of
-      (code, Just (_, t')) -> go (maybe ('&' : T.unpack code ++ ";" ++ acc)
-                                        (: acc)
-                                        (decode code)) t'
-      _                    -> error "removeHtml: Unexpected.."
+      (code, Just (';', t')) -> go (maybe ('&' : T.unpack code ++";"++ acc)
+                                          (: acc)
+                                          (decode code)) t'
+      (code, _)              -> T.pack $ reverse acc
+                                  ++ '&' : T.unpack code ++ "[;]"
     where
     decode :: Text -> Maybe Char
     decode "amp"                           = Just '&'
