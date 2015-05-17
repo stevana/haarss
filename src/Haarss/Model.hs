@@ -11,7 +11,7 @@ module Haarss.Model where
 import           Prelude              hiding (foldl, foldr)
 
 import           Control.Applicative
-import           Control.Lens         hiding (below)
+import           Control.Lens         hiding (below, (<.>))
 import           Control.Monad
 import           Data.Foldable
 import           Data.Hashable
@@ -407,3 +407,4 @@ saveModel :: [AnnFeed] -> IO ()
 saveModel fs = do
   modelPath <- getAppUserDataDirectory $ "haarss" </> "model"
   BS.writeFile modelPath $ encode fs
+  copyFile modelPath $ modelPath <.> "backup"
