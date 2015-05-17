@@ -132,7 +132,7 @@ setupReactive cfg vty sz initModel eEvent tid = do
 ------------------------------------------------------------------------
 
 cmd :: Vty.Event -> Model -> Mode -> (Maybe ExCmd, Mode)
-cmd e m Normal | m^.downloading > 0 = (Nothing, Normal)
+cmd _ m Normal | m^.downloading > 0 = (Nothing, Normal)
 cmd e _ Normal | key 'K'   == e     = normal Move Top
 cmd e _ Normal | key 'k'   == e     = normal Move Up
 cmd e _ Normal | key 'j'   == e     = normal Move Down
@@ -166,12 +166,12 @@ cmd e _ Normal | key 'b'   == e     = normal Scroll UpFull
 cmd e _ Normal | key 'u'   == e     = normal Scroll UpHalf
 cmd _ _ Normal                      = (Nothing, Normal)
 
-cmd e m Input  | isKey e            = input  PutPrompt (getKey e)
-cmd e m Input  | backspace == e     = input  DelPrompt ()
-cmd e m Input  | esc       == e     = normal CancelPrompt ()
-cmd e m Input  | enter     == e     = normal ClosePrompt ()
-cmd e m Input  | ctrl 'g'  == e     = normal CancelPrompt ()
-cmd _ m Input                       = (Nothing, Input)
+cmd e _ Input  | isKey e            = input  PutPrompt (getKey e)
+cmd e _ Input  | backspace == e     = input  DelPrompt ()
+cmd e _ Input  | esc       == e     = normal CancelPrompt ()
+cmd e _ Input  | enter     == e     = normal ClosePrompt ()
+cmd e _ Input  | ctrl 'g'  == e     = normal CancelPrompt ()
+cmd _ _ Input                       = (Nothing, Input)
 
 ------------------------------------------------------------------------
 
