@@ -93,8 +93,9 @@ mergeItems old new = flip map new $ \n ->
     Just o  -> n & isRead .~ o^.isRead
   where
   hashItem :: AnnItem -> Int
-  hashItem i = hash (i^.item.itemTitle) `hashWithSalt`
-               hash (i^.item.itemDescription)
+  hashItem i = hash (i^.item.itemTitle)       `hashWithSalt`
+               hash (i^.item.itemDescription) `hashWithSalt`
+               hash (i^.item.itemDate)
 
   m :: IntMap AnnItem
   m = M.fromList $ map (\o -> (hashItem o, o)) old
