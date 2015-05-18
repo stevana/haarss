@@ -139,6 +139,8 @@ cmd e _ Normal | key 'j'   == e     = normal Move Down
 cmd e _ Normal | key 'J'   == e     = normal Move Bot
 cmd e _ Normal | key 'l'   == e     = normal Move In
 cmd e _ Normal | enter     == e     = normal Move In
+cmd e _ Normal | arrowUp   == e     = normal Move Up
+cmd e _ Normal | arrowDown == e     = normal Move Down
 cmd e m Normal | key 'q'   == e     = if browsingFeeds m
                                       then normal Quit
                                              (m^.feeds.to closeWindow)
@@ -182,6 +184,10 @@ input  o c = (Just $ ExCmd o c, Input)
 key, ctrl :: Char -> Vty.Event
 key  c    = Vty.EvKey (Vty.KChar c) []
 ctrl c    = Vty.EvKey (Vty.KChar c) [Vty.MCtrl]
+
+arrowUp, arrowDown :: Vty.Event
+arrowUp   = Vty.EvKey Vty.KUp    []
+arrowDown = Vty.EvKey Vty.KDown  []
 
 enter, backspace, esc :: Vty.Event
 enter     = Vty.EvKey Vty.KEnter []
