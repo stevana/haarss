@@ -105,8 +105,7 @@ fromAtom doc = newEmptyFeed AtomKind
       go True  (T.uncons -> Nothing)       = T.empty
       go True  (T.uncons -> Just ('>', t)) = go False  t
       go True  (T.uncons -> Just (_, t))   = go True t
-      go False (T.uncons -> _)             = error "Impossible"
-      go True  (T.uncons -> _)             = error "Impossible"
+      go _     (T.uncons -> _)             = error "Impossible"
 
 
 ------------------------------------------------------------------------
