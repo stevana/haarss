@@ -39,10 +39,9 @@ fromXML doc = case doc^.root.localName of
   _      -> fail   $ error "fromXML: unknown feed kind."
 
 process :: Text -> Text
-process = T.strip
-        . (\ts -> if length ts > 1
-                     then ts^._head.to (`T.append` " [...]")
-                     else ts^._head)
+process = (\ts -> if length ts > 1
+                     then ts^._head.to T.strip.to (`T.append` " [...]")
+                     else ts^._head.to T.strip)
         . filter (not . T.null)
         . T.lines
 
