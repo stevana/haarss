@@ -10,8 +10,10 @@ import           Data.ByteString.Lazy    (ByteString)
 import           Data.Monoid
 import           Data.Text               (Text)
 import qualified Data.Text               as T
+import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
 import           Data.Text.Lens          (unpacked)
-import           Text.XML                (def, parseLBS, decodeHtmlEntities,
+import           Text.XML                (def, parseText,
+                                          decodeHtmlEntities,
                                           psDecodeEntities)
 import           Text.XML.Lens
 
@@ -24,7 +26,9 @@ import           Haarss.Feed.Feed
 
 parseFeed :: ByteString -> Either SomeException Feed
 parseFeed bs = do
-  doc <- parseLBS (def { psDecodeEntities = decodeHtmlEntities }) bs
+  -- Try decoding as UTF8 first, fall back on Latin1 if it fails.
+  let t = either (const (decodeLatin1 bs)) id (decodeUtf8' bs)
+  doc <- parseText (def { psDecodeEntities = decodeHtmlEntities }) t
   deepseq doc $ fromXML doc
 
 fromXML :: Document -> Either SomeException Feed
@@ -116,7 +120,7 @@ fromAtom doc = newEmptyFeed AtomKind
 main = do
   bs <- BS.readFile "/tmp/master.atom"
   case parseFeed bs of
-    Left  _ -> putStrLn "error"
+    Left  e -> putStrLn $ show e
     Right f -> putStrLn $ ppFeed f
 
 
