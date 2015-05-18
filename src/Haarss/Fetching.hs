@@ -25,21 +25,23 @@ download1 :: String     -- ^ URL
           -> Options    -- ^ Client configuration
           -> IO AnnFeed
 download1 url callback time opts = do
+  r' <- do
+    mr <- timeout (3 * 1000000) $ getWith opts url
+    case mr of
+      Nothing -> return $ failFeed TimeoutFailure
+      Just r  -> do
+        case r^.responseBody.to parseFeed.to (bimap show id) of
+          Left  err -> return $ failFeed $ ParseFailure err
+          Right f   -> return $ defAnnFeed (f & feedHome .~ url)
+                                   & history .~ [Success time]
+    `catches`
+      [ Handler (\(e :: HttpException) ->
+          return $ failFeed $ DownloadFailure $ simplifyHttpException e)
+      , Handler (\(_ :: SomeException) ->
+          return $ failFeed UnknownFailure)
+      ]
   callback
-  mr <- timeout (3 * 1000000) $ getWith opts url
-  case mr of
-    Nothing -> return $ failFeed TimeoutFailure
-    Just r  -> do
-      case r^.responseBody.to parseFeed.to (bimap show id) of
-        Left  err -> return $ failFeed $ ParseFailure err
-        Right f   -> return $ defAnnFeed (f & feedHome .~ url)
-                                 & history .~ [Success time]
-  `catches`
-    [ Handler (\(e :: HttpException) ->
-        return $ failFeed $ DownloadFailure $ simplifyHttpException e)
-    , Handler (\(_ :: SomeException) ->
-        return $ failFeed UnknownFailure)
-    ]
+  return r'
   where
   failFeed e = defAnnFeed (newEmptyFeed AtomKind
                              & feedTitle ?~ T.pack url
