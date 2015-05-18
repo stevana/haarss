@@ -58,7 +58,7 @@ fromRSS1 doc = newEmptyFeed RSS1Kind
   toItem :: Element -> Item
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
-    & itemLink        .~ e^?entire.ell "link".text.unpacked
+    & itemLink        .~ e^?entire.ell "link".text.to T.strip.unpacked
     & itemDate        .~ Nothing
     & itemFeedLink    .~ Nothing
     & itemDescription .~ e^?entire.ell "description".text
@@ -76,7 +76,7 @@ fromRSS2 doc = newEmptyFeed RSS2Kind
   toItem :: Element -> Item
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.el "title".text & mapped %~ process)
-    & itemLink        .~ e^?entire.el "link".text.unpacked
+    & itemLink        .~ e^?entire.el "link".text.to T.strip.unpacked
     & itemDate        .~ e^?entire.el "pubDate".text
     & itemFeedLink    .~ Nothing
     & itemDescription .~ e^?entire.el "description".text
@@ -93,7 +93,7 @@ fromAtom doc = newEmptyFeed AtomKind
   toItem :: Element -> Item
   toItem e = newEmptyItem
     & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
-    & itemLink        .~ e^?entire.ell "link".attr "href".unpacked
+    & itemLink        .~ e^?entire.ell "link".attr "href".to T.strip.unpacked
     & itemDate        .~ (e^?entire.ell "published".text <|>
                           e^?entire.ell "updated".text)
     & itemFeedLink    .~ Nothing
