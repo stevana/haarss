@@ -4,15 +4,12 @@
 module Haarss.View (viewModel) where
 
 import           Control.Lens
-import           Data.Char                 (chr)
 import           Data.Foldable             (toList)
 import           Data.Sequence             (Seq)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
 import           Graphics.Vty              hiding (resize)
-import           Graphics.Vty.Prelude
 import           Network.HTTP.Types.Status
-import           Numeric                   (readHex)
 
 import           Haarss.Feed.Annotated
 import           Haarss.Feed.Feed
@@ -26,6 +23,7 @@ import           Haarss.Model.Window
 viewModel :: Vty -> Model -> IO ()
 viewModel v = update v . picForImage . render
 
+{-
 renderDebug :: Model -> Image
 renderDebug m = vertCat
   [ separator
@@ -35,6 +33,7 @@ renderDebug m = vertCat
   ]
   where
   (_, h) = m^.displayRegion
+-}
 
 render ::  Model -> Image
 render m = vertCat
@@ -95,14 +94,14 @@ drawModel m = case m^.browsing.focus of
     scrollLines = foldr (helper (h - 10) (length ts)) 0 sds
       where
       helper :: Int -> Int -> ScrollDir -> Int -> Int
-      helper sz max DownFull ih | ih + sz >= max           = ih
-                                | otherwise                = ih + sz
-      helper sz max DownHalf ih | ih + (sz `div` 2) >= max = ih
-                                | otherwise                = ih + sz `div` 2
-      helper sz max UpFull   ih | ih - sz <= 0             = 0
-                                | otherwise                = ih - sz
-      helper sz max UpHalf   ih | ih - (sz `div` 2) <= 0   = 0
-                                | otherwise                = ih - sz `div` 2
+      helper sz mx DownFull ih | ih + sz >= mx           = ih
+                               | otherwise               = ih + sz
+      helper sz mx DownHalf ih | ih + (sz `div` 2) >= mx = ih
+                               | otherwise               = ih + sz `div` 2
+      helper sz _  UpFull   ih | ih - sz <= 0            = 0
+                               | otherwise               = ih - sz
+      helper sz _  UpHalf   ih | ih - (sz `div` 2) <= 0  = 0
+                               | otherwise               = ih - sz `div` 2
 
 ------------------------------------------------------------------------
 
@@ -114,7 +113,7 @@ drawWin w e f = vertCat
   ]
   where
   drawSeq :: (a -> Image) -> Seq a -> Image
-  drawSeq f = vertCat . toList . fmap f
+  drawSeq f' = vertCat . toList . fmap f'
 
 drawList :: (a -> Image) -> [a] -> Image
 drawList f = vertCat . map f
@@ -208,7 +207,7 @@ removeHtml = go ""
       -- XXX: might want to drop everything inside the style tag...
       ("style", Just ('>', t')) -> go acc t'
       (_,       Just ('>', t')) -> go acc t'
-      (tag,     Nothing)        -> T.pack $ reverse acc ++ T.unpack tag
+      (tag,     _)              -> T.pack $ reverse acc ++ T.unpack tag
                                                         ++ "[>]"
   go acc (T.uncons -> Just (c, t))   = go (c : acc) t
-  go acc (T.uncons -> _)             = error "Impossible."
+  go _   (T.uncons -> _)             = error "Impossible."
