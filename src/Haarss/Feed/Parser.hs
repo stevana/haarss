@@ -36,7 +36,12 @@ fromXML doc = case doc^.root.localName of
   _      -> fail   $ error "fromXML: unknown feed kind."
 
 process :: Text -> Text
-process = T.strip . head . filter (not . T.null) . T.lines
+process = T.strip
+        . (\ts -> if length ts > 1
+                     then ts^._head.to (`T.append` " [...]")
+                     else ts^._head)
+        . filter (not . T.null)
+        . T.lines
 
 fromRSS1 :: Document -> Feed
 fromRSS1 doc = newEmptyFeed RSS1Kind
