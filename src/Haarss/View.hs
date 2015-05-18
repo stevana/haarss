@@ -210,30 +210,5 @@ removeHtml = go ""
       (_,       Just ('>', t')) -> go acc t'
       (tag,     Nothing)        -> T.pack $ reverse acc ++ T.unpack tag
                                                         ++ "[>]"
-  go acc (T.uncons -> Just ('&', t)) =
-    case T.break (== ';') t & _2 %~ T.uncons of
-      (code, Just (';', t')) -> go (maybe ('&' : T.unpack code ++";"++ acc)
-                                          (: acc)
-                                          (decode code)) t'
-      (code, _)              -> T.pack $ reverse acc
-                                  ++ '&' : T.unpack code ++ "[;]"
-    where
-    decode :: Text -> Maybe Char
-    decode "amp"                           = Just '&'
-    decode "gt"                            = Just '>'
-    decode "lt"                            = Just '<'
-    decode "mdash"                         = Just '—'
-    decode "nbsp"                          = Just ' '
-    decode "ndash"                         = Just '–'
-    decode "quot"                          = Just '"'
-    decode t@(T.unpack -> '#' : 'x' : hex) = fromHex hex t
-    decode t@(T.unpack -> '#' : 'X' : hex) = fromHex hex t
-    decode (T.unpack   -> '#' : dec)       = Just $ chr $ read dec
-    decode t                               = Nothing
-
-    fromHex :: String -> Text -> Maybe Char
-    fromHex s t = case readHex s of
-      [(i, "")] -> Just $ chr i
-      _         -> Nothing
   go acc (T.uncons -> Just (c, t))   = go (c : acc) t
   go acc (T.uncons -> _)             = error "Impossible."

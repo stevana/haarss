@@ -11,7 +11,8 @@ import           Data.Monoid
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Text.Lens          (unpacked)
-import           Text.XML                (def, parseLBS)
+import           Text.XML                (def, parseLBS, decodeHtmlEntities,
+                                          psDecodeEntities)
 import           Text.XML.Lens
 
 import           Haarss.Feed.Feed
@@ -23,7 +24,7 @@ import           Haarss.Feed.Feed
 
 parseFeed :: ByteString -> Either SomeException Feed
 parseFeed bs = do
-  doc <- parseLBS def bs
+  doc <- parseLBS (def { psDecodeEntities = decodeHtmlEntities }) bs
   deepseq doc $ fromXML doc
 
 fromXML :: Document -> Either SomeException Feed
