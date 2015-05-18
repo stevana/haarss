@@ -92,7 +92,7 @@ setupReactive cfg vty sz initModel eEvent tid = do
           resp UpdateFeeds   us = do
             sync $ pushFeedback $ Downloading (length us)
             time <- getCurrentTime
-            fs   <- downloadFeeds us (sync $ pushFeedback FeedDownloaded)
+            fs   <- download us (sync $ pushFeedback FeedDownloaded)
             return (time, fs)
           resp Move          _  = return ()
           resp OpenUrl       mu = case mu of

@@ -4,14 +4,14 @@
 module Haarss.Feed.Parser (parseFeed) where
 
 import           Control.Applicative
+import           Control.DeepSeq
 import           Control.Exception       (SomeException)
 import           Data.ByteString.Lazy    (ByteString)
 import           Data.Monoid
 import           Data.Text               (Text)
 import qualified Data.Text               as T
-import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
 import           Data.Text.Lens          (unpacked)
-import           Text.XML                (def, parseText)
+import           Text.XML                (def, parseLBS)
 import           Text.XML.Lens
 
 import           Haarss.Feed.Feed
@@ -23,10 +23,8 @@ import           Haarss.Feed.Feed
 
 parseFeed :: ByteString -> Either SomeException Feed
 parseFeed bs = do
-  -- Try decoding as UTF8 first, fall back on Latin1 if it fails.
-  let t = either (const (decodeLatin1 bs)) id (decodeUtf8' bs)
-  doc <- parseText def t
-  fromXML doc
+  doc <- parseLBS def bs
+  deepseq doc $ fromXML doc
 
 fromXML :: Document -> Either SomeException Feed
 fromXML doc = case doc^.root.localName of
