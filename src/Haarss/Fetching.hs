@@ -1,10 +1,8 @@
-{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haarss.Fetching where
 
 import           Control.Concurrent.ParallelIO
-import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens
 import qualified Data.Text                     as T
@@ -32,9 +30,9 @@ download1 url callback time opts = do
   case mr of
     Nothing -> return $ failFeed TimeoutFailure
     Just r  -> do
-      case force $ r^.responseBody.to parseFeed.to (bimap show id) of
-        Left  !err -> return $ failFeed $ ParseFailure err
-        Right !f   -> return $ defAnnFeed (f & feedHome .~ url)
+      case r^.responseBody.to parseFeed.to (bimap show id) of
+        Left  err -> return $ failFeed $ ParseFailure err
+        Right f   -> return $ defAnnFeed (f & feedHome .~ url)
                                  & history .~ [Success time]
   `catches`
     [ Handler (\(e :: HttpException) ->

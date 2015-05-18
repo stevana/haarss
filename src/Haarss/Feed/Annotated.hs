@@ -7,7 +7,6 @@
 module Haarss.Feed.Annotated where
 
 import           Control.Applicative
-import           Control.DeepSeq
 import           Control.Lens
 import           Data.Hashable
 import           Data.IntMap         (IntMap)
@@ -156,5 +155,3 @@ instance Arbitrary AnnFeed where
 
 instance Arbitrary AnnItem where
   arbitrary = AnnItem <$> arbitrary <*> arbitrary
-
-instance NFData AnnFeed where

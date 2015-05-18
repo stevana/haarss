@@ -11,8 +11,6 @@
 module Haarss.Feed.Feed where
 
 import           Control.Applicative
-import           Control.DeepSeq
-import           Control.DeepSeq.Generics ()
 import           Control.Lens
 import           Data.Foldable       (Foldable)
 import           Data.Maybe
@@ -97,7 +95,3 @@ instance Arbitrary Item where
   arbitrary = Item <$> fmap Just arbitrary <*> fmap Just arbitrary
                    <*> fmap Just arbitrary <*> fmap Just arbitrary
                    <*> fmap Just arbitrary
-
-instance NFData FeedKind              where
-instance NFData Item                  where
-instance NFData a => NFData (Feed' a) where
