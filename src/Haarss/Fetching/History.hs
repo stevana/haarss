@@ -6,6 +6,7 @@
 module Haarss.Fetching.History where
 
 import           Control.Applicative
+import           Control.DeepSeq
 import           Control.Lens
 import           Data.Serialize
 import           Data.Time                 (Day (..), DiffTime, UTCTime (..),
@@ -125,3 +126,5 @@ instance Arbitrary Day where
 
 instance Arbitrary DiffTime where
   arbitrary = secondsToDiffTime <$> arbitrary
+
+instance NFData History where
