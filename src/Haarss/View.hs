@@ -8,8 +8,10 @@ import           Data.Foldable             (toList)
 import           Data.Sequence             (Seq)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
+import           Data.Version              (showVersion)
 import           Graphics.Vty              hiding (resize)
 import           Network.HTTP.Types.Status
+import           Paths_haarss              (version)
 
 import           Haarss.Feed.Annotated
 import           Haarss.Feed.Feed
@@ -17,6 +19,7 @@ import           Haarss.Fetching.History
 import           Haarss.Interface
 import           Haarss.Model hiding (update)
 import           Haarss.Model.Window
+
 
 ------------------------------------------------------------------------
 
@@ -37,7 +40,7 @@ renderDebug m = vertCat
 
 render ::  Model -> Image
 render m = vertCat
-  [ bar " haarss 0.1"
+  [ bar $ T.pack $ " haarss " ++ showVersion version
   , separator
   , resizeHeight (h - 5) (drawModel m)
   , separator
