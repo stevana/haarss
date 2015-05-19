@@ -5,6 +5,7 @@ module Haarss.Fetching where
 import           Control.Concurrent.ParallelIO
 import           Control.Exception
 import           Control.Lens
+import           Data.ByteString               (ByteString)
 import qualified Data.Text                     as T
 import           Data.Time
 import           Network.HTTP.Client           (HttpException)
@@ -48,11 +49,12 @@ download1 url callback time opts = do
                              & feedHome  .~ url)
                  & history .~ [Failure time e]
 
-download :: [String] -> IO () -> IO [AnnFeed]
-download urls callback = do
+download :: [String] -> IO () -> Maybe (ByteString, Int) -> IO [AnnFeed]
+download urls callback mproxy = do
   time <- getCurrentTime
   let opts = defaults & redirects .~ 3
                       & manager   .~ Left tlsManagerSettings
+                      & proxy     .~ uncurry httpProxy `fmap` mproxy
 
   parallel $ flip map urls $ \url -> download1 url callback time opts
 

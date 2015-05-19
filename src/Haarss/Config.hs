@@ -4,6 +4,7 @@ module Haarss.Config where
 
 import           Control.Lens
 import           Data.Char        (isSpace)
+import           Data.ByteString  (ByteString)
 import           Data.Text.Lens
 import           System.Directory (createDirectoryIfMissing, doesFileExist,
                                    getAppUserDataDirectory)
@@ -17,6 +18,7 @@ import           Haarss.Feed.Feed
 
 data Config = Config
   { _browser :: String
+  , _proxy   :: Maybe (ByteString, Int)  -- ^ Hostname and port.
   , _entries :: [(Maybe String, String)]
   }
   deriving (Show, Read)
@@ -28,6 +30,7 @@ makeLenses ''Config
 defaultConfig :: Config
 defaultConfig = Config
   { _browser = "firefox"
+  , _proxy   = Nothing
   , _entries = [ (Just "haarss github feed", haarss) ]
   }
   where
@@ -70,6 +73,7 @@ updateConfig cfg fs = do
   ppConfig c = unlines
     [ "Config"
     , "  { _browser = " ++ c^.browser.to show
+    , "  , _proxy   = " ++ c^.proxy.to show
     , "  , _entries = "
     , "    " ++ ppList (c^.entries)
     , "  }"

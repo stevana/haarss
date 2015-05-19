@@ -93,6 +93,7 @@ setupReactive cfg vty sz initModel eEvent tid = do
             sync $ pushFeedback $ Downloading (length us)
             time <- getCurrentTime
             fs   <- download us (sync $ pushFeedback FeedDownloaded)
+                             (cfg^.proxy)
             return (time, fs)
           resp Move          _  = return ()
           resp OpenUrl       mu = case mu of

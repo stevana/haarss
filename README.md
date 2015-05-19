@@ -18,7 +18,6 @@ In particular, `haarss` has the following advantages over `snownews`:
 
 Some things `snownews` has are still missing though:
 
-  * Proxy support;
   * OPML imports and exports;
   * Customisable keybindings;
   * Customisable colours;
