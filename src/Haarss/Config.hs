@@ -9,6 +9,7 @@ import           Data.Text.Lens
 import           System.Directory (createDirectoryIfMissing, doesFileExist,
                                    getAppUserDataDirectory)
 import           System.FilePath  (takeDirectory, (</>))
+import           Text.Show.Pretty (ppShow)
 
 import           Haarss.Feed.Annotated
 import           Haarss.Feed.Feed
@@ -63,25 +64,6 @@ loadConfig = do
 updateConfig :: Config -> [AnnFeed] -> IO ()
 updateConfig cfg fs = do
   configPath <- getAppUserDataDirectory $ "haarss" </> "config"
-  writeFile configPath $ ppConfig $ cfg & entries .~
+  writeFile configPath $ ppShow $ cfg & entries .~
     (flip map fs $ \f -> (f^.alias.traverse.unpacked.to Just,
                           f^.feed.feedHome.unpacked))
-
-  where
-  -- XXX: Use ansi-wl-pprint package?
-  ppConfig :: Config -> String
-  ppConfig c = unlines
-    [ "Config"
-    , "  { _browser = " ++ c^.browser.to show
-    , "  , _proxy   = " ++ c^.proxy.to show
-    , "  , _entries = "
-    , "    " ++ ppList (c^.entries)
-    , "  }"
-    ]
-    where
-    ppList :: Show a => [a] -> String
-    ppList []       = "[]"
-    ppList (x : xs) = "[ " ++ show x ++ "\n" ++ go xs
-      where
-      go []       = "    ]"
-      go (y : ys) = "    , " ++ show y ++ "\n" ++ go ys
