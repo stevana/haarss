@@ -47,6 +47,8 @@ library
     , Haarss.Model.Window
     , Haarss.View
 
+  other-modules: Paths_haarss
+
   build-depends:
       base >= 4.2 && < 4.9
     , bifunctors >= 3.1 && < 4.5
