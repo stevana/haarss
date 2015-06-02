@@ -26,9 +26,9 @@ import           Test.Framework       hiding (resize)
 -- XXX:
 import qualified Data.ByteString      as BS
 import           Data.Time
+import           Data.Time.Format
 import           Graphics.Vty.Prelude
 import           System.Directory
-import           System.Locale
 import           System.FilePath
 
 import           Haarss.Config

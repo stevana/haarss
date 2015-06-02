@@ -52,7 +52,7 @@ import           Control.Applicative hiding (empty)
 import           Control.Lens        hiding (below, (<|), (|>))
 import           Data.Bifoldable
 import           Data.Bitraversable
-import           Data.Foldable
+import           Data.Foldable       (toList)
 import           Data.Monoid
 import           Data.Sequence       as Seq
 import           Test.Framework      hiding (resize)

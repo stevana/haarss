@@ -17,8 +17,8 @@ import           Data.Serialize
 import           Data.Text           (Text)
 import qualified Data.Text           as T
 import           Data.Time
+import           Data.Time.Format
 import           GHC.Generics        (Generic)
-import           System.Locale
 import           Test.Framework      hiding (Failure, Success)
 
 import           Haarss.Feed.Feed
