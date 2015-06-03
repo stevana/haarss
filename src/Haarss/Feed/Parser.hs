@@ -88,7 +88,8 @@ fromAtom doc = newEmptyFeed AtomKind
   where
   toItem :: Element -> Item
   toItem e = newEmptyItem
-    & itemTitle       .~ (e^?entire.ell "title".text & mapped %~ process)
+    & itemTitle       .~ (e^?entire.ell "title".text.to T.strip
+                           & mapped %~ process)
     & itemLink        .~ e^?entire.ell "link".attr "href".to T.strip.unpacked
     & itemDate        .~ (e^?entire.ell "published".text <|>
                           e^?entire.ell "updated".text)
