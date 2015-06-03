@@ -4,6 +4,7 @@
 module Haarss.View (viewModel) where
 
 import           Control.Lens
+import           Data.Char                 (chr)
 import           Data.Foldable             (toList)
 import           Data.Sequence             (Seq)
 import           Data.Text                 (Text)
@@ -11,6 +12,7 @@ import qualified Data.Text                 as T
 import           Data.Version              (showVersion)
 import           Graphics.Vty              hiding (resize)
 import           Network.HTTP.Types.Status
+import           Numeric                   (readHex)
 import           Paths_haarss              (version)
 
 import           Haarss.Feed.Annotated
@@ -212,5 +214,30 @@ removeHtml = go ""
       (_,       Just ('>', t')) -> go acc t'
       (tag,     _)              -> T.pack $ reverse acc ++ T.unpack tag
                                                         ++ "[>]"
+  go acc (T.uncons -> Just ('&', t0)) =
+    case T.break (== ';') t0 & _2 %~ T.uncons of
+      (code, Just (';', t')) -> go (maybe ('&' : T.unpack code ++";"++ acc)
+                                          (: acc)
+                                          (decode code)) t'
+      (code, _)              -> T.pack $ reverse acc
+                                  ++ '&' : T.unpack code ++ "[;]"
+    where
+    decode :: Text -> Maybe Char
+    decode "amp"                         = Just '&'
+    decode "gt"                          = Just '>'
+    decode "lt"                          = Just '<'
+    decode "mdash"                       = Just '—'
+    decode "nbsp"                        = Just ' '
+    decode "ndash"                       = Just '–'
+    decode "quot"                        = Just '"'
+    decode (T.unpack -> '#' : 'x' : hex) = fromHex hex
+    decode (T.unpack -> '#' : 'X' : hex) = fromHex hex
+    decode (T.unpack   -> '#' : dec)     = Just $ chr $ read dec
+    decode _                             = Nothing
+
+    fromHex :: String -> Maybe Char
+    fromHex s = case readHex s of
+      [(i, "")] -> Just $ chr i
+      _         -> Nothing
   go acc (T.uncons -> Just (c, t))   = go (c : acc) t
   go _   (T.uncons -> _)             = error "Impossible."

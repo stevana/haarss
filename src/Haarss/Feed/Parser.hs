@@ -12,9 +12,7 @@ import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Text.Lazy.Encoding (decodeLatin1, decodeUtf8')
 import           Data.Text.Lens          (unpacked)
-import           Text.XML                (def, parseText,
-                                          decodeHtmlEntities,
-                                          psDecodeEntities)
+import           Text.XML                (def, parseText)
 import           Text.XML.Lens
 
 import           Haarss.Feed.Feed
@@ -26,9 +24,8 @@ import           Haarss.Feed.Feed
 
 parseFeed :: ByteString -> Either SomeException Feed
 parseFeed bs = do
-  -- Try decoding as UTF8 first, fall back on Latin1 if it fails.
   let t = either (const (decodeLatin1 bs)) id (decodeUtf8' bs)
-  doc <- parseText (def { psDecodeEntities = decodeHtmlEntities }) t
+  doc <- parseText def t
   deepseq doc $ fromXML doc
 
 fromXML :: Document -> Either SomeException Feed
