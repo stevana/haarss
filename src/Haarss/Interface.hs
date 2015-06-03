@@ -32,22 +32,22 @@ data Op'
   | Quit'
 
 data Op :: Op' -> * where
-  Move           :: Op Move'
-  MarkAsRead     :: Op MarkAsRead'
-  MarkAllAsRead  :: Op MarkAllAsRead'
-  UpdateFeeds    :: Op UpdateFeeds'
-  OpenUrl        :: Op OpenUrl'
-  OpenPrompt     :: Op OpenPrompt'
-  PutPrompt      :: Op PutPrompt'
-  DelPrompt      :: Op DelPrompt'
-  CancelPrompt   :: Op CancelPrompt'
-  ClosePrompt    :: Op ClosePrompt'
-  RemoveFeed     :: Op RemoveFeed'
-  Rearrange      :: Op Rearrange'
-  Search         :: Op Search'
-  Scroll         :: Op Scroll'
-  Resize         :: Op Resize'
-  Quit           :: Op Quit'
+  Move           :: Op 'Move'
+  MarkAsRead     :: Op 'MarkAsRead'
+  MarkAllAsRead  :: Op 'MarkAllAsRead'
+  UpdateFeeds    :: Op 'UpdateFeeds'
+  OpenUrl        :: Op 'OpenUrl'
+  OpenPrompt     :: Op 'OpenPrompt'
+  PutPrompt      :: Op 'PutPrompt'
+  DelPrompt      :: Op 'DelPrompt'
+  CancelPrompt   :: Op 'CancelPrompt'
+  ClosePrompt    :: Op 'ClosePrompt'
+  RemoveFeed     :: Op 'RemoveFeed'
+  Rearrange      :: Op 'Rearrange'
+  Search         :: Op 'Search'
+  Scroll         :: Op 'Scroll'
+  Resize         :: Op 'Resize'
+  Quit           :: Op 'Quit'
 
 data Dir = Up | Down | In | Out | Top | Bot
   deriving (Show, Eq, Enum, Bounded)
@@ -75,7 +75,7 @@ instance Arbitrary ScrollDir where
 type family Cmd (o :: Op') :: * where
   Cmd 'Move'           = Dir
   Cmd 'MarkAsRead'     = ()
-  Cmd 'MarkAllAsRead'  = ()
+  Cmd 'MarkAllAsRead'  = [AnnFeed]
   Cmd 'UpdateFeeds'    = [String]
   Cmd 'OpenUrl'        = Maybe String
   Cmd 'OpenPrompt'     = Prompt

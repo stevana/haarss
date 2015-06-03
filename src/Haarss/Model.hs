@@ -26,7 +26,6 @@ import           Test.Framework       hiding (resize)
 -- XXX:
 import qualified Data.ByteString      as BS
 import           Data.Time
-import           Data.Time.Format
 import           Graphics.Vty.Prelude
 import           System.Directory
 import           System.FilePath
@@ -278,7 +277,7 @@ update :: Op o -> Cmd o -> Resp o -> Model -> Model
 update Move          d   ()  m = move d m
 update UpdateFeeds   _   tfs m = feedsDownloaded tfs m
 update OpenUrl       _   ()  m = m
-update MarkAllAsRead ()  ()  m = markAllAsRead m
+update MarkAllAsRead _   ()  m = markAllAsRead m
 update MarkAsRead    ()  ()  m =
   -- XXX: This won't work for the overview feed.
   m & browsing.focus.annItems.focus.isRead %~ not

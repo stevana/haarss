@@ -5,12 +5,10 @@
 
 module Haarss.Main where
 
-import           Control.Applicative
 import           Control.Concurrent
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad
-import           Data.Monoid
 import           Data.Time
 import           Data.Typeable
 import           FRP.Sodium
@@ -20,22 +18,11 @@ import           System.Exit
 import           System.Process
 
 import           Haarss.Config
-import           Haarss.Feed.Annotated
 import           Haarss.Fetching
 import           Haarss.Interface
 import           Haarss.Model
 import           Haarss.Model.Window
 import           Haarss.View
-
-------------------------------------------------------------------------
-
-data Save = Save [AnnFeed]
-  deriving (Typeable)
-
-instance Show Save where
-  show _ = "Save"
-
-instance Exception Save where
 
 ------------------------------------------------------------------------
 
@@ -51,17 +38,20 @@ main = do
   sync $ setupReactive cfg vty sz model eEvent tid
 
   forever (Vty.nextEvent vty >>= sync . pushEvent)
-    `catches` [ Handler (\(Save fs) -> do
+    `catches` [ Handler (\Shutdown  -> do
                   Vty.shutdown vty
-                  updateConfig cfg fs
-                  saveModel fs
                   exitSuccess)
-              , Handler (\e              -> do
+              , Handler (\e         -> do
                   Vty.shutdown vty
                   putStrLn $ "Unexpected error: " ++
                     show (e :: SomeException)
                   exitFailure)
               ]
+
+data Shutdown = Shutdown
+  deriving (Show, Typeable)
+
+instance Exception Shutdown where
 
 ------------------------------------------------------------------------
 
@@ -105,14 +95,25 @@ setupReactive cfg vty sz initModel eEvent tid = do
               _ <- createProcess (proc (cfg^.browser) [u])
                      { std_err = CreatePipe }
               return ()
-          resp MarkAllAsRead () = return ()
+          resp MarkAllAsRead fs = do
+
+            -- This will save the /previous/ state of the feeds, because
+            -- we haven't yet marked them as read -- if we mark as read
+            -- twice in a row we save the current state though.
+            updateConfig cfg fs
+            saveModel fs
+            return ()
           resp MarkAsRead    () = return ()
           resp OpenPrompt    _  = return ()
           resp PutPrompt     _  = return ()
           resp DelPrompt     () = return ()
           resp CancelPrompt  () = return ()
           resp ClosePrompt   () = return ()
-          resp Quit          fs = throwTo tid $ Save fs
+          resp Quit          fs = do
+            updateConfig cfg fs
+            saveModel fs
+            throwTo tid Shutdown
+            threadDelay 1000000 -- Wait for main thread to shut down...
           resp RemoveFeed    () = return ()
           resp Rearrange     _  = return ()
           resp Search        _  = return ()
@@ -150,7 +151,8 @@ cmd e m Normal | key 'R'   == e     = normal UpdateFeeds
                                                [getFeedUrl m]
 cmd e m Normal | key 'r'   == e     = normal UpdateFeeds (getFeedUrls m)
 cmd e m Normal | key 'o'   == e     = normal OpenUrl (getItemUrl m)
-cmd e _ Normal | key 'm'   == e     = normal MarkAllAsRead ()
+cmd e m Normal | key 'm'   == e     = normal MarkAllAsRead
+                                               (m^.feeds.to closeWindow)
 cmd e _ Normal | key 'M'   == e     = normal MarkAsRead ()
 cmd e _ Normal | key 'D'   == e     = normal RemoveFeed ()
 cmd e m Normal | key 'c'   == e &&
