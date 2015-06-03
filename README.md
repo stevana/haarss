@@ -46,9 +46,12 @@ in your `PATH`.
 `haarss` is controlled via the keyboard as follows:
 
   * Add and delete feeds with `a` and `D`;
-  * Navigate down and up with `J`, `j`, `k`, and `K`;
+
+  * Navigate down and up with `DOWN ARROW`, `UP ARROW`, `J`, `j`, `k`,
+    and `K`;
+
   * Update the current feed with `R` or update all feeds with `r`;
-  * Read feed/item with `l` or `ENTER`, go back with `q` (going back
+  * Read feed/item with `l` or `RETURN`, go back with `q` (going back
     when viewing the feeds will quit the program);
   * Scroll the item's text with `SPACE`, `d`, `b`, and `u`;
   * Open the current item's url using an external browser with `o`;
