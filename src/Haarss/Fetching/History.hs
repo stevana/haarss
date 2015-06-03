@@ -5,7 +5,6 @@
 
 module Haarss.Fetching.History where
 
-import           Control.Applicative
 import           Control.Lens
 import           Data.Serialize
 import           Data.Time                 (Day (..), DiffTime, UTCTime (..),

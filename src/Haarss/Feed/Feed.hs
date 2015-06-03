@@ -10,9 +10,7 @@
 
 module Haarss.Feed.Feed where
 
-import           Control.Applicative
 import           Control.Lens
-import           Data.Foldable       (Foldable)
 import           Data.Maybe
 import           Data.Serialize
 import           Data.Text           (Text)

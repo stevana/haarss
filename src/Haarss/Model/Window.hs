@@ -48,7 +48,6 @@ module Haarss.Model.Window
 import           Prelude             hiding (length, null)
 import qualified Prelude
 
-import           Control.Applicative hiding (empty)
 import           Control.Lens        hiding (below, (<|), (|>))
 import           Data.Bifoldable
 import           Data.Bitraversable

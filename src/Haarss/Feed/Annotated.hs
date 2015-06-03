@@ -12,12 +12,10 @@ import           Data.Hashable
 import           Data.IntMap         (IntMap)
 import qualified Data.IntMap         as M
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Serialize
 import           Data.Text           (Text)
 import qualified Data.Text           as T
 import           Data.Time
-import           Data.Time.Format
 import           GHC.Generics        (Generic)
 import           Test.Framework      hiding (Failure, Success)
 
