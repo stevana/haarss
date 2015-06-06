@@ -20,7 +20,11 @@ import           Haarss.Feed.Feed
 data Config = Config
   { _browser :: String
   , _proxy   :: Maybe (ByteString, Int)  -- ^ Hostname and port.
-  , _entries :: [(Maybe String, String)]
+
+  , _entries :: [( Maybe String -- ^ Alias
+                 , String       -- ^ URL
+                 , [Ignore]     -- ^ Things to ignore when merging.
+                 )]
   }
   deriving (Show, Read)
 
@@ -32,7 +36,7 @@ defaultConfig :: Config
 defaultConfig = Config
   { _browser = "firefox"
   , _proxy   = Nothing
-  , _entries = [ (Just "haarss github feed", haarss) ]
+  , _entries = [ (Just "haarss github feed", haarss, []) ]
   }
   where
   haarss = "https://github.com/stevana/haarss/commits/master.atom"
@@ -66,4 +70,5 @@ updateConfig cfg fs = do
   configPath <- getAppUserDataDirectory $ "haarss" </> "config"
   writeFile configPath $ ppShow $ cfg & entries .~
     (flip map fs $ \f -> (f^.alias.traverse.unpacked.to Just,
-                          f^.feed.feedHome.unpacked))
+                          f^.feed.feedHome.unpacked,
+                          f^.ignore))

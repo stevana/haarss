@@ -201,12 +201,17 @@ initialModel :: UTCTime -> Config -> Model
 initialModel time cfg = makeModel (addOverviewFeed time fs)
   where
   fs :: [AnnFeed]
-  fs = cfg^.entries & mapped %~ \(_, u) -> defAnnFeed $
-         newEmptyFeed AtomKind
-           & feedTitle      ?~ T.pack u
-           & feedHome       .~ u
-           & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
-                                 rfc822DateFormat time)
+  fs = cfg^.entries & mapped %~ \(_, u, is) -> AnnFeed
+    { _feed    = newEmptyFeed AtomKind
+                   & feedTitle      ?~ T.pack u
+                   & feedHome       .~ u
+                   & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
+                                         rfc822DateFormat time)
+                   & feedItems      .~ []
+    , _alias   = Nothing
+    , _history = []
+    , _ignore  = is
+    }
 
 -- XXX: The magic -5...
 -- XXX: We should probably resize items window size as well, but @items@
@@ -337,7 +342,8 @@ feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
 feedsDownloaded (time, [f]) m | m^.feeds.to (length . closeWindow) > 2 =
   if browsingItems m
      then m' & items .~ makeWindow (m'^.items.to size)
-                          (mergeItems (m^.items.to closeWindow)
+                          (mergeItems (f^.ignore)
+                                      (m^.items.to closeWindow)
                                       (m'^.feeds.focus.feed.feedItems))
      else m'
   where

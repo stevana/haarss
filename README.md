@@ -67,10 +67,26 @@ the `cmd` function).
 ### Files
 
 `haarss` creates maintains two files; `~/.haarss/config` and
-`~/.haarss/model`. The former is a humanly readable and editable list of
-feeds and their aliases, while the latter is a binary file which
-contains the current state of the feeds -- which items feeds have, if
-they are read or not, etc.
+`~/.haarss/model`.
+
+The config file is a humanly readable and editable list of feeds, their
+aliases and a list of changes to ignore when making the list of new
+items for a newly fetched feed. Here is an example entry:
+
+    (Just "apa", "http://example.com/rss", [Date])
+
+In this case the alias is `"apa"` (it could also have been `Nothing`),
+and we ignore if the `Date` has changed -- i.e. if some item has
+previously been marked as read, but the date of that item has changed at
+the server, then keep it marked as read. This could be useful if a
+server bumps the date, in order to try to make you reread their
+posts. We can also ignore changes to the title or the description of the
+item by adding `Title` or `Description` in the ignore list. Ignoring
+changes to the description could be useful if the description changes
+over time, e.g. it contains the amount of comments people have made.
+
+The model file is a binary file which contains the current state of the
+feeds -- which items feeds have, if they are read or not, etc.
 
 Both files are read when `haarss` is started and written when `haarss`
 is shut down, so to avoid losing your changes only edit the config
