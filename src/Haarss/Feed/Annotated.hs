@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -21,6 +22,11 @@ import           Data.Time
 import           GHC.Generics        (Generic)
 import           Test.QuickCheck     hiding (Failure, Success)
 import           Test.Framework      hiding (Failure, Success, elements)
+
+#if __GLASGOW_HASKELL__ < 710
+import           Data.Monoid         (mconcat)
+import           System.Locale       (defaultTimeLocale, rfc822DateFormat)
+#endif
 
 import           Haarss.Feed.Feed
 import           Haarss.Fetching.History

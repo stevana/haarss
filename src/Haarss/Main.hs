@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE RecursiveDo         #-}
@@ -16,6 +17,11 @@ import           FRP.Sodium.IO
 import qualified Graphics.Vty        as Vty
 import           System.Exit
 import           System.Process
+
+#if __GLASGOW_HASKELL__ < 710
+import           Control.Applicative
+import           Data.Monoid         (mconcat)
+#endif
 
 import           Haarss.Config
 import           Haarss.Fetching

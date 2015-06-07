@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Haarss.Fetching.History where
@@ -14,6 +15,10 @@ import           GHC.Generics              (Generic)
 import           Network.HTTP.Client       (HttpException (..))
 import           Network.HTTP.Types.Status (Status (..))
 import           Test.QuickCheck           hiding (Failure, Success)
+
+#if __GLASGOW_HASKELL__ < 710
+import           Control.Applicative
+#endif
 
 ------------------------------------------------------------------------
 

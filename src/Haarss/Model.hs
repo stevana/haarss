@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveFoldable    #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveTraversable #-}
@@ -29,6 +30,9 @@ import           Data.Time
 import           Graphics.Vty.Prelude
 import           System.Directory
 import           System.FilePath
+#if __GLASGOW_HASKELL__ < 710
+import           System.Locale (defaultTimeLocale, rfc822DateFormat)
+#endif
 
 import           Haarss.Config
 import           Haarss.Feed.Annotated

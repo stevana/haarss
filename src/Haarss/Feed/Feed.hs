@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE DeriveFoldable       #-}
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveGeneric        #-}
@@ -18,6 +19,11 @@ import qualified Data.Text           as T
 import           Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import           GHC.Generics        (Generic)
 import           Test.QuickCheck
+
+#if __GLASGOW_HASKELL__ < 710
+import           Control.Applicative
+import           Data.Foldable       (Foldable)
+#endif
 
 ------------------------------------------------------------------------
 

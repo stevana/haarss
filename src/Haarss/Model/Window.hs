@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE DeriveFunctor   #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns    #-}
@@ -56,6 +57,11 @@ import           Data.Monoid
 import           Data.Sequence       as Seq
 import           Test.Framework      hiding (resize)
 import           Test.QuickCheck     hiding (resize)
+
+#if __GLASGOW_HASKELL__ < 710
+import           Control.Applicative ((<$>), (<*>))
+import           Data.Foldable       (foldMap)
+#endif
 
 ------------------------------------------------------------------------
 -- * Types
