@@ -406,7 +406,9 @@ loadModel cfg = do
                                    & feed.feedHome  .~ e^._2
                                    & alias          .~ (e^._1 & mapped
                                                               %~ T.pack)
-        Just f  -> f & alias .~ (e^._1 & mapped %~ T.pack))
+                                   & ignore         .~ (e^._3)
+        Just f  -> f & alias  .~ (e^._1 & mapped %~ T.pack)
+                     & ignore .~ (e^._3))
     where
     im :: IntMap AnnFeed
     im = M.fromList $ map (\f -> (f^.feed.feedHome.to hash, f))
