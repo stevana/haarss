@@ -3,3 +3,5 @@ dist/
 *.agdai
 .hpc/
 .HTF/
+.cabal-sandbox/
+cabal.sandbox.config
