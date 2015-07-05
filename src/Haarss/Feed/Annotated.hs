@@ -11,8 +11,8 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Lens
 import           Data.Hashable
-import           Data.IntMap         (IntMap)
-import qualified Data.IntMap         as M
+import           Data.IntMap.Strict  (IntMap)
+import qualified Data.IntMap.Strict  as M
 import           Data.List           (nub, sort, (\\))
 import           Data.Maybe
 import           Data.Serialize
@@ -28,7 +28,7 @@ import           Data.Monoid         (mconcat)
 import           System.Locale       (defaultTimeLocale, rfc822DateFormat)
 #endif
 
-import           Haarss.Feed.Feed
+import           Yeast.Feed
 import           Haarss.Fetching.History
 
 ------------------------------------------------------------------------
@@ -45,13 +45,13 @@ defAnnItem :: Item -> AnnItem
 defAnnItem i = AnnItem i False
 
 instance Show AnnItem where
-  show i = i^.item.itemTitle.to (maybe "(no item title)" T.unpack)
+  show i = i^.item.title.to (maybe "(no item title)" T.unpack)
 
 data Ignore = Title | Description | Date
   deriving (Show, Read, Eq, Ord, Enum, Bounded, Generic)
 
 data AnnFeed = AnnFeed
-  { _feed    :: Feed' [AnnItem]
+  { _feed    :: FeedF [AnnItem]
   , _alias   :: Maybe Text
   , _history :: [History]
   , _ignore  :: [Ignore]
@@ -60,20 +60,22 @@ data AnnFeed = AnnFeed
 
 makeLenses ''AnnFeed
 
-newEmptyAnnFeed :: AnnFeed
-newEmptyAnnFeed = AnnFeed
-  { _feed    = newEmptyFeed AtomKind & feedItems.traverse %~ defAnnItem
+emptyAnnFeed :: AnnFeed
+emptyAnnFeed = AnnFeed
+  { _feed    = emptyFeed AtomKind
   , _alias   = Nothing
   , _history = []
   , _ignore  = []
   }
 
 defAnnFeed :: Feed -> AnnFeed
-defAnnFeed f = newEmptyAnnFeed
-  & feed .~ (f & feedItems.traverse %~ defAnnItem)
+defAnnFeed f = emptyAnnFeed
+  & feed .~ (f { _feedFItems = map defAnnItem (_feedFItems f) })
+  -- XXX: why doesn't the following work?
+  -- & feed .~ (f & items %~ map defAnnItem)
 
 instance Show AnnFeed where
-  show f = f^.feed.feedTitle.to (maybe "(no title)" T.unpack)
+  show f = f^.feed.title.to (maybe "(no title)" T.unpack)
 
 -- (Multiples of same feed will cause problems.)
 mergeFeeds :: [AnnFeed] -> [AnnFeed] -> [AnnFeed]
@@ -91,9 +93,9 @@ mergeFeed old new
   = old & history %~ \h -> prune (new^.history ++ h)
 
   | otherwise
-  = new & feed.feedItems .~ mergeItems (old^.ignore)
-                                       (old^.feed.feedItems)
-                                       (new^.feed.feedItems)
+  = new & feed.items .~ mergeItems (old^.ignore)
+                                   (old^.feed.items)
+                                   (new^.feed.items)
         & alias          .~ old^.alias
         & history        %~ (\h -> prune (h ++ old^.history))
         & ignore         .~ old^.ignore
@@ -114,9 +116,9 @@ mergeItems is old new = flip map new $ \n ->
     $ sort (enumFrom minBound) \\ sort (nub is)
     where
     hashIgnore :: Ignore -> Int
-    hashIgnore Title       = hash $ i^.item.itemTitle
-    hashIgnore Description = hash $ i^.item.itemDescription
-    hashIgnore Date        = hash $ i^.item.itemDate
+    hashIgnore Title       = hash $ i^.item.title
+    hashIgnore Description = hash $ i^.item.description
+    hashIgnore Date        = hash $ i^.item.date
 
   m :: IntMap AnnItem
   m = M.fromList $ map (\o -> (hashItem o, o)) old
@@ -132,24 +134,24 @@ prop_isReadKept is = andOf (traverse.isRead) $
 ------------------------------------------------------------------------
 
 makeOverview :: UTCTime -> [AnnFeed] -> AnnFeed
-makeOverview time fs = newEmptyAnnFeed
-    & feed    .~ (newEmptyFeed AtomKind
-      & feedTitle       ?~ "(New headlines)"
-      & feedDescription ?~ "(New headlines)"
-      & feedLastUpdate  ?~ T.pack rfc822Time
-      & feedItems       .~ is)
+makeOverview time fs = emptyAnnFeed
+    & feed    .~ (emptyFeed AtomKind
+        & title       ?~ "(New headlines)"
+        & description ?~ "(New headlines)"
+        & date        ?~ T.pack rfc822Time
+        & items       .~ is)
     & history .~ [Success time]
     where
     rfc822Time = formatTime defaultTimeLocale rfc822DateFormat time
 
     is :: [AnnItem]
-    is = is' & mapped %~ \(i, mt) -> i & item.itemTitle %~ \t ->
+    is = is' & mapped %~ \(i, mt) -> i & item.title %~ \t ->
       mconcat [Just "(", mt, Just ") ", t]
       where
       is' :: [(AnnItem, Maybe Text)]
       is' = fs & concatMapOf folded (\f -> zip
-        (f^.feed.feedItems^..folded.filtered (not . _isRead))
-        (repeat (f^.alias <|> f^.feed.feedTitle)))
+        (f^.feed.items^..folded.filtered (not . _isRead))
+        (repeat (f^.alias <|> f^.feed.title)))
 
 addOverviewFeed :: UTCTime -> [AnnFeed] -> [AnnFeed]
 addOverviewFeed time fs = makeOverview time fs : fs
@@ -158,10 +160,10 @@ addOverviewFeed time fs = makeOverview time fs : fs
 -- items in the feeds from which the overview was created.
 prop_overviewLength :: UTCTime -> [AnnFeed] -> Bool
 prop_overviewLength time fs =
-  overview^.feed.feedItems.to length == sumOf folded fs'
+  overview^.feed.items.to length == sumOf folded fs'
   where
   fs' :: [Int]
-  fs' = fs^..folded.feed.feedItems & mapped %~ length . filter (not._isRead)
+  fs' = fs^..folded.feed.items & mapped %~ length . filter (not._isRead)
 
   overview :: AnnFeed
   overview = head $ addOverviewFeed time fs

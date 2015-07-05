@@ -12,7 +12,8 @@ import           System.FilePath  (takeDirectory, (</>))
 import           Text.Show.Pretty (ppShow)
 
 import           Haarss.Feed.Annotated
-import           Haarss.Feed.Feed
+
+import           Yeast.Feed
 
 ------------------------------------------------------------------------
 -- * Types
@@ -70,5 +71,5 @@ updateConfig cfg fs = do
   configPath <- getAppUserDataDirectory $ "haarss" </> "config"
   writeFile configPath $ ppShow $ cfg & entries .~
     (flip map fs $ \f -> (f^.alias.traverse.unpacked.to Just,
-                          f^.feed.feedHome.unpacked,
+                          f^.feed.feedHome.traverse.unpacked,
                           f^.ignore))

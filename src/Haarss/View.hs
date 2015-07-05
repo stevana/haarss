@@ -6,6 +6,7 @@ module Haarss.View (viewModel) where
 import           Control.Lens
 import           Data.Char                 (chr)
 import           Data.Foldable             (toList)
+import           Data.Maybe                (fromMaybe)
 import           Data.Sequence             (Seq)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
@@ -16,12 +17,12 @@ import           Numeric                   (readHex)
 import           Paths_haarss              (version)
 
 import           Haarss.Feed.Annotated
-import           Haarss.Feed.Feed
 import           Haarss.Fetching.History
 import           Haarss.Interface
 import           Haarss.Model hiding (update)
 import           Haarss.Model.Window
 
+import           Yeast.Feed
 
 ------------------------------------------------------------------------
 
@@ -59,6 +60,10 @@ render m = vertCat
   status 0 (Just (p, s)) = " " ++ show p ++ ": " ++ s
   status _ _             = error "Impossible."
 
+be :: (Contravariant f, Profunctor p) =>
+       a -> Optical' p p f (Maybe a) a
+be x = to (fromMaybe x)
+
 drawModel :: Model -> Image
 drawModel m = case m^.browsing.focus of
 
@@ -77,19 +82,20 @@ drawModel m = case m^.browsing.focus of
     [ attributed boldAttr (desc f^.be "")
     , separator
     , attributed defAttr
-        (T.center (w - 1) ' ' (is^.focus.item.itemTitle.be ""))
+        (T.center (w - 1) ' ' (is^.focus.item.title.be ""))
     , separator
     , drawList (\t -> char defAttr ' ' <|> attributed defAttr t) $
-        is^.focus.item.itemDescription.be
-         "(no desc)".to (scrollText sds . fmt (min 60 w) . removeHtml)
+        is^.focus.item.description.be
+         "(no desc)".to (scrollText sds . concatMap (fmt (min 60 w))
+                    . T.lines . removeHtml)
     ]
 
   where
   (w, h) = m^.displayRegion
 
   desc :: AnnFeed -> Maybe Text
-  desc f = asumOf both (f^.feed.feedDescription,
-                        f^.feed.feedTitle)
+  desc f = asumOf both (f^.feed.description,
+                        f^.feed.title)
 
   -- XXX: Why do we need to add the blank line?
   scrollText :: [ScrollDir] -> [Text] -> [Text]
@@ -147,23 +153,23 @@ failedImage attr f = char attr $ case f^.history of
 feedImage :: Int -> Attr -> AnnFeed -> Image
 feedImage w attr f = horizCat
   [ failedImage attr f
-  , text' attr title
-  , charFill attr ' ' (w - T.length title - T.length unread - 3) 1
+  , text' attr tit
+  , charFill attr ' ' (w - T.length tit - T.length unread - 3) 1
   , attributed attr unread
   , charFill attr ' ' (1 :: Int) 1
   ]
   where
-  title :: Text
-  title = (asumOf both (f^.alias, f^.feed.feedTitle))^.be "no title"
+  tit :: Text
+  tit = (asumOf both (f^.alias, f^.feed.title))^.be "no title"
 
   unread :: Text
-  unread = f^.feed.feedItems.to
+  unread = f^.feed.items.to
     (T.pack . (\s -> if s == "0" then "" else s ++ " new") .
       show . length . filter (not._isRead))
 
 itemImage :: Attr -> Attr -> Int -> AnnItem -> Image
 itemImage r n w i = horizCat
-  [ attributed attr (i^.item.itemTitle.be "no title")
+  [ attributed attr (i^.item.title.be "no title")
   , charFill r ' '  w 1
   ]
   where

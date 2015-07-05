@@ -18,6 +18,7 @@ import           Data.Foldable
 import           Data.Hashable
 import           Data.IntMap          (IntMap)
 import qualified Data.IntMap          as M
+import           Data.Maybe           (fromMaybe)
 import           Data.Serialize
 import           Data.Text            (Text)
 import qualified Data.Text            as T
@@ -36,9 +37,10 @@ import           System.Locale (defaultTimeLocale, rfc822DateFormat)
 
 import           Haarss.Config
 import           Haarss.Feed.Annotated
-import           Haarss.Feed.Feed
 import           Haarss.Interface
 import           Haarss.Model.Window
+
+import           Yeast.Feed
 
 ------------------------------------------------------------------------
 -- * Datatypes
@@ -95,21 +97,21 @@ prop_feedsSetSet :: Model -> Window AnnFeed -> Window AnnFeed -> Bool
 prop_feedsSetSet m w1 w2 =
   ((m & feeds .~ w1) & feeds .~ w2) == (m & feeds .~ w2)
 
-items :: Lens' Model (Window AnnItem)
-items = lens g s
+modelItems :: Lens' Model (Window AnnItem)
+modelItems = lens g s
   where
   g :: Model -> Window AnnItem
   g m = case m^.browsing.focus of
-    TheFeed  f      -> if f^.feed.feedItems.to null
+    TheFeed  f      -> if f^.feed.items.to null
                        then error "items: Feed has no items."
-                       else f^.feed.feedItems.to
+                       else f^.feed.items.to
                               (makeWindow (m^.feeds.to size))
     TheItems _ is   -> is
     TheText  _ is _ -> is
 
   s :: Model -> Window AnnItem -> Model
   s m w = case m^.browsing.focus of
-    TheFeed  f      -> m & browsing.focus .~ TheFeed (f & feed.feedItems .~
+    TheFeed  f      -> m & browsing.focus .~ TheFeed (f & feed.items .~
                                                             closeWindow w)
     TheItems f _    -> m & browsing.focus .~ TheItems f w
     TheText  f _ i  -> m & browsing.focus .~ TheText  f w i
@@ -117,17 +119,17 @@ items = lens g s
 -- Note that this is only true modulo not caring about the size.
 prop_itemsSetView :: Model -> Window AnnItem -> Bool
 prop_itemsSetView m w =
-  closeWindow w == (m & items .~ w)^.items.to closeWindow
+  closeWindow w == (m & modelItems .~ w)^.modelItems.to closeWindow
 
 prop_itemsViewSet :: Model -> Bool
 prop_itemsViewSet m
     -- XXX: This is bad -- see error thrown in @items@.
-  | m^.feeds.focus.feed.feedItems.to length == 0 = True
-  | otherwise =  m == (m & items .~ m^.items)
+  | m^.feeds.focus.feed.items.to length == 0 = True
+  | otherwise =  m == (m & modelItems .~ m^.modelItems)
 
 prop_itemsSetSet :: Model -> Window AnnItem -> Window AnnItem -> Bool
 prop_itemsSetSet m w1 w2 =
-  ((m & items .~ w1) & items .~ w2) == (m & items .~ w2)
+  ((m & modelItems .~ w1) & modelItems .~ w2) == (m & modelItems .~ w2)
 
 instance Show Model where
   show m | browsingFeeds m = unlines
@@ -144,17 +146,17 @@ instance Show Model where
   show m | browsingItems m = unlines
     [ "Browsing items."
     , ""
-    , m^.items.to show
+    , m^.modelItems.to show
     , ""
-    , "Size   of items window: " ++ m^.items.to (show . size)
+    , "Size   of items window: " ++ m^.modelItems.to (show . size)
     , "Length of items window: " ++
-        m^.items.to (show . length . closeWindow)
+        m^.modelItems.to (show . length . closeWindow)
     ]
   show m                   = unlines
     [ "Browsing the text."
     , ""
-    , m^.browsing.focus.annItems.focus.item.itemDescription
-        .be "(no desc)".to T.unpack
+    , m^.browsing.focus.annItems.focus.item.description
+        .to (fromMaybe "(no desc)").to T.unpack
     , ""
     , "Scroll: " ++ m^.browsing.focus.scroll.to show
     ]
@@ -163,7 +165,7 @@ instance Show Focus where
   show (TheFeed f)       = show f
   show (TheItems _ is)   = show is
   show (TheText _ is s) = unlines
-    [ "TheText: " ++ is^.focus.item.itemDescription.to show
+    [ "TheText: " ++ is^.focus.item.description.to show
     , ""
     , "Scroll: " ++ show s
     ]
@@ -206,12 +208,12 @@ initialModel time cfg = makeModel (addOverviewFeed time fs)
   where
   fs :: [AnnFeed]
   fs = cfg^.entries & mapped %~ \(_, u, is) -> AnnFeed
-    { _feed    = newEmptyFeed AtomKind
-                   & feedTitle      ?~ T.pack u
-                   & feedHome       .~ u
-                   & feedLastUpdate ?~ T.pack (formatTime defaultTimeLocale
-                                         rfc822DateFormat time)
-                   & feedItems      .~ []
+    { _feed    = emptyFeed AtomKind
+                   & title    ?~ T.pack u
+                   & feedHome ?~ T.pack u
+                   & date     ?~ T.pack (formatTime defaultTimeLocale
+                                   rfc822DateFormat time)
+                   & items    .~ []
     , _alias   = Nothing
     , _history = []
     , _ignore  = is
@@ -241,7 +243,7 @@ moveBrowse :: Dir -> Int -> Browse -> Browse
 moveBrowse d h fz = case fz^.focus of
 
   TheFeed  f      -> case d of
-    In  -> let is = f^.feed.feedItems
+    In  -> let is = f^.feed.items
            in if not (null is)
               then fz & focus .~ TheItems f (makeWindow (h - 7) is)
               else fz
@@ -250,7 +252,7 @@ moveBrowse d h fz = case fz^.focus of
 
   TheItems f iz   -> case d of
     In  -> fz & focus .~ TheText  f (iz & focus.isRead .~ True) []
-    Out -> fz & focus .~ TheFeed (f & feed.feedItems .~ closeWindow iz)
+    Out -> fz & focus .~ TheFeed (f & feed.items .~ closeWindow iz)
     _   -> fz & focus .~ TheItems f (moveWin d iz)
 
   TheText  f iz _ -> case d of
@@ -270,15 +272,15 @@ browsingItems :: Model -> Bool
 browsingItems m = m^.browsing.focus & has _TheItems
 
 getFeedUrl :: Model -> String
-getFeedUrl m = m^.feeds.focus.feed.feedHome
+getFeedUrl m = m^.feeds.focus.feed.feedHome.to (fromMaybe "").unpacked
 
 -- XXX: Magic drop 1...
 getFeedUrls :: Model -> [String]
 getFeedUrls m = m^.feeds.to closeWindow.to (drop 1) & mapped %~
-  \f -> f^.feed.feedHome
+  \f -> f^.feed.feedHome.to (fromMaybe "").unpacked
 
 getItemUrl :: Model -> Maybe String
-getItemUrl m = m^.browsing.focus.annItems.focus.item.itemLink
+getItemUrl m = m^.browsing.focus.annItems.focus.item.link.to (fmap T.unpack)
 
 ------------------------------------------------------------------------
 
@@ -326,16 +328,16 @@ feedback FeedDownloaded  m = m & downloading -~ 1
 markAllAsRead :: Model -> Model
 markAllAsRead m
   | browsingFeeds m
-  = m & feeds.both.feed.feedItems.traverse.isRead .~ True
+  = m & feeds.both.feed.items.traverse.isRead .~ True
 
   | browsingItems m &&
-    m^.feeds.focus.feed.feedTitle == Just "(New headlines)"
-  = m & feeds.both.feed.feedItems.traverse.isRead .~ True
-      & items.both.isRead .~ True
+    m^.feeds.focus.feed.title == Just "(New headlines)"
+  = m & feeds.both.feed.items.traverse.isRead .~ True
+      & modelItems.both.isRead .~ True
 
   -- XXX: we should update overview feed also...
-  | otherwise = m & items.both.isRead .~ True
-                  & feeds.focus.feed.feedItems.traverse.isRead .~ True
+  | otherwise = m & modelItems.both.isRead .~ True
+                  & feeds.focus.feed.items.traverse.isRead .~ True
 
 updateOverviewFeed :: UTCTime -> Window AnnFeed -> Window AnnFeed
 updateOverviewFeed time w =
@@ -345,10 +347,10 @@ feedsDownloaded :: (UTCTime, [AnnFeed]) -> Model -> Model
 -- XXX: Overview feed specific...
 feedsDownloaded (time, [f]) m | m^.feeds.to (length . closeWindow) > 2 =
   if browsingItems m
-     then m' & items .~ makeWindow (m'^.items.to size)
-                          (mergeItems (f^.ignore)
-                                      (m^.items.to closeWindow)
-                                      (m'^.feeds.focus.feed.feedItems))
+     then m' & modelItems .~ makeWindow (m'^.modelItems.to size)
+                               (mergeItems (f^.ignore)
+                                  (m^.modelItems.to closeWindow)
+                                  (m'^.feeds.focus.feed.items))
      else m'
   where
   m'  = m & feeds.focus %~ flip mergeFeed f
@@ -361,15 +363,15 @@ feedsDownloaded (time, fs)  m =
                    fs))
 
 search :: Text -> Model -> Model
-search t m | browsingFeeds m = m & feeds %~ findFirst (matchFeed t)
-           | browsingItems m = m & items %~ findFirst (matchItem t)
+search t m | browsingFeeds m = m & feeds      %~ findFirst (matchFeed t)
+           | browsingItems m = m & modelItems %~ findFirst (matchItem t)
            | otherwise       = m
   where
   matchFeed :: Text -> AnnFeed -> Bool
-  matchFeed t' f = t' `matchText` (f^.alias <|> f^.feed.feedTitle)
+  matchFeed t' f = t' `matchText` (f^.alias <|> f^.feed.title)
 
   matchItem :: Text -> AnnItem -> Bool
-  matchItem t' i = t' `matchText` (i^.item.itemTitle)
+  matchItem t' i = t' `matchText` (i^.item.title)
 
   matchText :: Text -> Maybe Text -> Bool
   matchText _  Nothing    = False
@@ -379,8 +381,8 @@ addFeed :: String -> Model -> Model
 addFeed url m = m & feeds %~ add f
   where
   f :: AnnFeed
-  f = newEmptyAnnFeed & feed.feedTitle ?~ T.pack url
-                      & feed.feedHome  .~ url
+  f = emptyAnnFeed & feed.title    ?~ T.pack url
+                   & feed.feedHome ?~ T.pack url
 
 ------------------------------------------------------------------------
 
@@ -402,11 +404,11 @@ loadModel cfg = do
   updateModel m = m & feeds .~
     (makeWindow (m^.feeds.to size) $ flip map (cfg^.entries) $ \e ->
       case M.lookup (e^._2.to hash) im of
-        Nothing -> newEmptyAnnFeed & feed.feedTitle ?~ e^._2.packed
-                                   & feed.feedHome  .~ e^._2
-                                   & alias          .~ (e^._1 & mapped
-                                                              %~ T.pack)
-                                   & ignore         .~ (e^._3)
+        Nothing -> emptyAnnFeed & feed.title     ?~ e^._2.packed
+                                & feed.feedHome  ?~ e^._2.packed
+                                & alias          .~ (e^._1 & mapped
+                                                           %~ T.pack)
+                                & ignore         .~ (e^._3)
         Just f  -> f & alias  .~ (e^._1 & mapped %~ T.pack)
                      & ignore .~ (e^._3))
     where

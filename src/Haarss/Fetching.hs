@@ -2,52 +2,21 @@
 
 module Haarss.Fetching where
 
-import           Control.Concurrent.ParallelIO
-import           Control.Exception
+import           Control.Monad
 import           Control.Lens
 import           Data.ByteString               (ByteString)
 import qualified Data.Text                     as T
 import           Data.Time
-import           Network.HTTP.Client           (HttpException)
 import           Network.HTTP.Client.TLS       (tlsManagerSettings)
 import           Network.Wreq
-import           System.Timeout
 
 import           Haarss.Feed.Annotated
-import           Haarss.Feed.Feed
-import           Haarss.Feed.Parser
-import           Haarss.Fetching.History
+import qualified Haarss.Fetching.History       as H
+
+import           Yeast.Feed
+import           Yeast.Fetch
 
 ------------------------------------------------------------------------
-
-download1 :: String     -- ^ URL
-          -> IO ()      -- ^ Callback
-          -> UTCTime    -- ^ Time
-          -> Options    -- ^ Client configuration
-          -> IO AnnFeed
-download1 url callback time opts = do
-  r' <- do
-    mr <- timeout (3 * 1000000) $ getWith opts url
-    case mr of
-      Nothing -> return $ failFeed TimeoutFailure
-      Just r  -> do
-        case r^.responseBody.to parseFeed.to (bimap show id) of
-          Left  err -> return $ failFeed $ ParseFailure err
-          Right f   -> return $ defAnnFeed (f & feedHome .~ url)
-                                   & history .~ [Success time]
-    `catches`
-      [ Handler (\(e :: HttpException) ->
-          return $ failFeed $ DownloadFailure $ simplifyHttpException e)
-      , Handler (\(_ :: SomeException) ->
-          return $ failFeed UnknownFailure)
-      ]
-  callback
-  return r'
-  where
-  failFeed e = defAnnFeed (newEmptyFeed AtomKind
-                             & feedTitle ?~ T.pack url
-                             & feedHome  .~ url)
-                 & history .~ [Failure time e]
 
 download :: [String] -> IO () -> Maybe (ByteString, Int) -> IO [AnnFeed]
 download urls callback mproxy = do
@@ -56,22 +25,24 @@ download urls callback mproxy = do
                       & manager   .~ Left tlsManagerSettings
                       & proxy     .~ uncurry httpProxy `fmap` mproxy
 
-  parallel $ flip map urls $ \url -> download1 url callback time opts
+  efs <- fetchManyWith opts (const callback) urls
 
-------------------------------------------------------------------------
--- XXX: Debugging
+  forM (zip urls efs) $ \(url, ef) -> do
+    case ef of
+      Left e  -> return $
+        defAnnFeed (emptyFeed AtomKind
+                      & title    ?~ T.pack url
+                      & feedHome ?~ T.pack url)
+          & history .~ [H.Failure time $ simplifyError e]
 
-{-
-downloadDebug :: [String] -> IO ()
-downloadDebug urls = do
-  dls <- download urls (return ()) feedParser
-  forM_ (zip urls dls) $ \(url, (_ , h)) -> case h of
-    Success _   -> putStrLn url
-    Failure _ e -> putStrLn $ show e ++ ": " ++ url
+      Right f -> return $
+        defAnnFeed (f & feedHome ?~ T.pack url)
+          & history .~ [H.Success time]
 
-runTest :: IO ()
-runTest = do
-  cfgPath <- getAppUserDataDirectory $ "haarss" </> "config"
-  cfg <- read <$> readFile cfgPath
-  downloadDebug (cfg^..entries.traverse._2)
--}
+  where
+  simplifyError :: FetchError -> H.FailureReason
+  simplifyError TimeoutFailure      = H.TimeoutFailure
+  simplifyError (DownloadFailure e) = H.DownloadFailure $
+    H.simplifyHttpException e
+  simplifyError (ParseFailure _)    = H.ParseFailure ""
+  simplifyError (UnknownFailure _)  = H.UnknownFailure
