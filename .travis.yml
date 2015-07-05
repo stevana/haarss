@@ -8,6 +8,14 @@ ghc:
 install:
   - cabal install cabal-install
   - cabal install happy
+
+  # We need to manually fetch and install yeast, as it's not on Hackage
+  # yet.
+  - git clone https://github.com/stevana/yeast.git
+  - cd yeast
+  - cabal install
+  - cd ..
+
   - cabal install --only-dependencies
 
 script:
