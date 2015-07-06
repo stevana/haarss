@@ -92,6 +92,68 @@ Both files are read when `haarss` is started and written when `haarss`
 is shut down, so to avoid losing your changes only edit the config
 manually when `haarss` is not running.
 
+### Future work
+
+There is still a lot to fix and improve, including:
+
+  * Distribution
+
+      - Uploading the package to Hackage;
+
+      - Adding Haddock documentation;
+
+      - Adding some screenshots (perhaps using ttygif?);
+
+      - A proper testing framework, work on this has been started in the
+        `yeast` library.
+
+  * Annoying bugs and missing features
+
+      - Most recent version of `sodium` does not play nice, see the
+        following
+        [issue](https://github.com/SodiumFRP/sodium/issues/55);
+
+      - Ability to change user agent;
+
+      - Mark (all) as read in item view should update overview feed;
+
+      - Resizing the terminal to a small size might cause a crash;
+
+      - Time stamps should be displayed (we should also normalise the
+        time stamps to our current timezone, this should be done by
+        `yeast`);
+
+      - It would be nice to have a library which tries to extract the
+        text of an article.
+
+  * Refactoring
+
+      - Replace `sodium` by `reactive-banana`? Or could we write that
+        code using an interface which can be implemented by both FRP
+        libraries? See `prototype/reactive-banana` for a start;
+
+      - The state is currently kept in memory and simply dumped into a
+        file on exit, so that it can be resumed later. While fast, it is
+        bad for a couple of reasons:
+
+          + Because of memory leaks the memory usage keeps increasing
+            over time;
+
+          + A change to the `Config` or `Model` datatypes often means
+            that the old memory dumps cannot be restored.
+
+      - The `Model` datatype deserves more thought;
+
+      - Overview feeds are hardcoded, should be made a special case of a
+        more general construct;
+
+      - Feed download history is a mess, we should be able to get a log
+        at least;
+
+      - The code in `Model.Window` should be factored out to a separate
+        package, and while at it search wrap around should be added as
+        well.
+
 ### Also see
 
   * [`snownews`](https://kiza.eu/software/snownews/)
