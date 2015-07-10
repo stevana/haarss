@@ -16,8 +16,8 @@ import           Control.Lens         hiding (below, (<.>))
 import           Control.Monad
 import           Data.Foldable
 import           Data.Hashable
-import           Data.IntMap          (IntMap)
-import qualified Data.IntMap          as M
+import           Data.IntMap.Strict   (IntMap)
+import qualified Data.IntMap.Strict   as M
 import           Data.Maybe           (fromMaybe)
 import           Data.Serialize
 import           Data.Text            (Text)
